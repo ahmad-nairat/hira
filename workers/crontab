@@ -1,0 +1,1 @@
+0 */2 * * * cd /app && /usr/local/bin/python src/domain_checker.py >> /var/log/domain_checker.log 2>&1

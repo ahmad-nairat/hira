@@ -1,0 +1,9 @@
+redis[hiredis]>=5.0
+sqlalchemy>=2.0
+psycopg2-binary>=2.9
+openai>=1.30
+boto3>=1.34
+pdfminer.six>=20221105
+dnspython>=2.6
+httpx>=0.27
+python-dotenv>=1.0

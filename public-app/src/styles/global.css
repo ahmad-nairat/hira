@@ -1,0 +1,123 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html, body { height: 100%; padding: 0; margin: 0; }
+  body {
+    @apply font-sans antialiased;
+    text-rendering: optimizeLegibility;
+  }
+  /* Per-org brand override: set --brand-* at component root to recolor everything */
+  :root {
+    --brand: #3B6DF0;
+    --brand-ink: #1E48BA;
+    --brand-soft: rgba(59, 109, 240, 0.06);
+    --brand-soft-strong: rgba(59, 109, 240, 0.12);
+  }
+}
+
+@layer components {
+  /* Marketing dark-page reset */
+  .mk { @apply bg-dark-bg text-dark-text; }
+
+  /* Display heading with italic-serif accent fragment */
+  .h-display-mk {
+    @apply font-sans font-medium tracking-[-0.04em] leading-[0.95];
+  }
+  .h-display-mk .ital {
+    @apply font-instr italic font-normal;
+    background: linear-gradient(180deg, #A48FFF 0%, #6E58E6 100%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+    color: transparent;
+  }
+
+  .h-display-lt { @apply font-sans font-medium tracking-[-0.03em] text-ink leading-[1.05]; }
+  .h-display-lt .ital {
+    @apply font-instr italic font-normal;
+    background: linear-gradient(180deg, #5B8BFF 0%, #1E48BA 100%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+    color: transparent;
+  }
+
+  .mono-eyebrow { @apply font-mono text-[11px] uppercase tracking-[0.18em] text-dark-text-3; }
+  .mono-eyebrow-lt { @apply font-mono text-[11px] uppercase tracking-[0.18em] text-ink-2; }
+
+  /* Buttons — dark theme (marketing) */
+  .btn-mk-primary {
+    @apply inline-flex items-center justify-center gap-2 h-11 px-5 rounded-full bg-white text-dark-bg font-medium text-[14px] transition-transform;
+  }
+  .btn-mk-primary:hover { transform: translateY(-1px); box-shadow: 0 8px 24px rgba(255, 255, 255, 0.12); }
+  .btn-mk-ghost {
+    @apply inline-flex items-center justify-center gap-2 h-11 px-5 rounded-full bg-transparent border border-dark-border text-dark-text font-medium text-[14px] hover:bg-white/[0.04] transition-colors;
+  }
+
+  /* Buttons — light theme (org pages) */
+  .btn-brand {
+    @apply inline-flex items-center justify-center gap-2 h-11 px-5 rounded-full text-white font-medium text-[14px] transition-all;
+    background: var(--brand);
+  }
+  .btn-brand:hover {
+    filter: brightness(0.95);
+    transform: translateY(-1px);
+    box-shadow: 0 10px 24px rgba(59, 109, 240, 0.18);
+  }
+  .btn-ghost-lt {
+    @apply inline-flex items-center justify-center gap-2 h-11 px-5 rounded-full bg-white border border-lt-border text-ink font-medium text-[14px] hover:bg-surface-2 transition-colors;
+  }
+  .btn-soft {
+    @apply inline-flex items-center justify-center gap-2 h-11 px-5 rounded-full text-ink font-medium text-[14px] transition-colors;
+    background: var(--brand-soft);
+    color: var(--brand-ink);
+  }
+  .btn-soft:hover { background: var(--brand-soft-strong); }
+
+  /* Inputs — light */
+  .lt-input {
+    @apply block w-full h-12 px-4 rounded-xl bg-white border border-lt-border text-ink text-[14px] placeholder:text-ink-3 transition-colors;
+  }
+  .lt-input:focus { @apply outline-none ring-2 ring-brand/30 border-brand; }
+  .lt-textarea { @apply lt-input h-auto py-3 resize-y; }
+  .lt-select { @apply lt-input pr-10 appearance-none; }
+  .lt-label { @apply block text-[13px] font-medium text-ink mb-2; }
+  .lt-help { @apply text-[12px] text-ink-3 mt-1.5; }
+
+  /* Chip — light */
+  .chip-lt { @apply inline-flex items-center gap-1.5 px-2.5 h-6 rounded-full text-[12px] font-medium bg-surface-2 text-ink-2 whitespace-nowrap; }
+  .chip-brand { @apply inline-flex items-center gap-1.5 px-2.5 h-6 rounded-full text-[12px] font-medium whitespace-nowrap; background: var(--brand-soft); color: var(--brand-ink); }
+
+  /* Card — light */
+  .lt-card { @apply bg-white border border-lt-border rounded-2xl; }
+
+  /* Skeleton shimmer */
+  .skel {
+    background: linear-gradient(90deg, #F3F5FA 0%, #E8ECF3 50%, #F3F5FA 100%);
+    background-size: 200% 100%;
+    animation: shimmer 1.6s linear infinite;
+  }
+
+  /* Dotted background grid for marketing dark pages */
+  .mk-grid {
+    background-image:
+      radial-gradient(circle at 1px 1px, rgba(255,255,255,0.04) 1px, transparent 0);
+    background-size: 32px 32px;
+  }
+
+  /* Job description prose styling on light pages */
+  .job-prose { @apply text-ink-2 text-[15px] leading-[1.7]; }
+  .job-prose h1, .job-prose h2, .job-prose h3 { @apply text-ink font-medium mt-8 mb-3; }
+  .job-prose h2 { @apply text-[22px]; }
+  .job-prose h3 { @apply text-[18px]; }
+  .job-prose p { @apply mb-4; }
+  .job-prose ul { @apply mb-4 pl-5 list-disc space-y-2; }
+  .job-prose ol { @apply mb-4 pl-5 list-decimal space-y-2; }
+  .job-prose li { @apply text-ink-2; }
+  .job-prose a { color: var(--brand); text-decoration: underline; text-underline-offset: 2px; }
+  .job-prose strong { @apply text-ink font-semibold; }
+  .job-prose code { @apply bg-surface-2 px-1.5 py-0.5 rounded text-[13px]; }
+  .job-prose blockquote { @apply border-l-2 pl-4 text-ink-2 my-4; border-color: var(--brand); }
+}

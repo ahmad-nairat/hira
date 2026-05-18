@@ -1,0 +1,132 @@
+name: hira
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-hira}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-hira}
+      POSTGRES_DB: ${POSTGRES_DB:-hira}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-hira} -d ${POSTGRES_DB:-hira}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - redis-data:/data
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  api:
+    build:
+      context: ./api
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      # Dev mode → TypeORM synchronize auto-creates tables. Switch to "production" once you generate migrations.
+      NODE_ENV: ${NODE_ENV:-development}
+      PORT: 3000
+      APP_URL: ${APP_URL:-http://localhost:5173}
+      PUBLIC_APP_URL: ${PUBLIC_APP_URL:-http://localhost:3001}
+      DATABASE_URL: postgres://${POSTGRES_USER:-hira}:${POSTGRES_PASSWORD:-hira}@postgres:5432/${POSTGRES_DB:-hira}
+      JWT_ACCESS_SECRET: ${JWT_ACCESS_SECRET}
+      JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET}
+      JWT_ACCESS_EXPIRES: ${JWT_ACCESS_EXPIRES:-15m}
+      JWT_REFRESH_EXPIRES: ${JWT_REFRESH_EXPIRES:-7d}
+      REDIS_URL: redis://redis:6379
+      R2_ENDPOINT: ${R2_ENDPOINT}
+      R2_ACCESS_KEY_ID: ${R2_ACCESS_KEY_ID}
+      R2_SECRET_ACCESS_KEY: ${R2_SECRET_ACCESS_KEY}
+      R2_BUCKET: ${R2_BUCKET:-hira-uploads}
+      R2_PUBLIC_URL: ${R2_PUBLIC_URL}
+      SMTP_HOST: ${SMTP_HOST}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_USER: ${SMTP_USER}
+      SMTP_PASS: ${SMTP_PASS}
+      SMTP_FROM: ${SMTP_FROM:-noreply@hira.com}
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID}
+      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET}
+      GOOGLE_CALLBACK_URL: ${GOOGLE_CALLBACK_URL}
+    ports:
+      - "${API_PORT:-3000}:3000"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:3000/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  workers:
+    build:
+      context: ./workers
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      api:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgres://${POSTGRES_USER:-hira}:${POSTGRES_PASSWORD:-hira}@postgres:5432/${POSTGRES_DB:-hira}
+      REDIS_URL: redis://redis:6379
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
+      R2_ENDPOINT: ${R2_ENDPOINT}
+      R2_ACCESS_KEY_ID: ${R2_ACCESS_KEY_ID}
+      R2_SECRET_ACCESS_KEY: ${R2_SECRET_ACCESS_KEY}
+      R2_BUCKET: ${R2_BUCKET:-hira-uploads}
+      R2_PUBLIC_URL: ${R2_PUBLIC_URL}
+
+  platform:
+    build:
+      context: ./platform
+      dockerfile: Dockerfile
+      args:
+        VITE_API_URL: ${VITE_API_URL:-http://localhost:3010/api/v1}
+    restart: unless-stopped
+    depends_on:
+      - api
+    ports:
+      - "${APP_PORT:-5173}:5173"
+
+  public-app:
+    build:
+      context: ./public-app
+      dockerfile: Dockerfile
+      args:
+        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:3010/api/v1}
+        NEXT_PUBLIC_APP_URL: ${NEXT_PUBLIC_APP_URL:-http://localhost:5173}
+    restart: unless-stopped
+    environment:
+      NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:3010/api/v1}
+      NEXT_PUBLIC_APP_URL: ${NEXT_PUBLIC_APP_URL:-http://localhost:5173}
+      # In-network URL the Next server uses for SSR fetches — bypasses the host port mapping.
+      INTERNAL_API_URL: http://api:3000/api/v1
+    depends_on:
+      - api
+    ports:
+      - "${PUBLIC_PORT:-3001}:3001"
+
+volumes:
+  postgres-data:
+  redis-data:

@@ -1,0 +1,10 @@
+.env
+.env.local
+*.log
+.DS_Store
+/*-design
+.env
+**/.env
+
+**/CLAUDE.md
+# Per-service ignores live in their own .gitignore
