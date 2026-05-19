@@ -59,7 +59,7 @@ export default function JobSettingsPage() {
             <button key={t.id} className={clsx('settings-nav-item', tab === t.id && 'active')} onClick={() => setTab(t.id)}>{t.l}</button>
           ))}
         </div>
-        <div className="max-w-[720px] w-full">
+        <div className="w-full">
           {tab === 'general' && (
             <div className="card p-6">
               <div className="mono-label mb-1">General info</div>

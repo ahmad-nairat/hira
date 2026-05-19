@@ -2,6 +2,7 @@ import express, { Application, Request, Response } from 'express'
 import cookieParser from 'cookie-parser'
 import cors from 'cors'
 import passport from 'passport'
+import { LOCAL_UPLOAD_DIR } from '../infrastructure/services/local-file.service'
 import {
   BaseRoute,
   AuthRoutes,
@@ -54,6 +55,10 @@ export class AppServer {
 
   private setupRoutes(): void {
     this.app.get('/health', (_req: Request, res: Response) => res.json({ status: 'ok' }))
+
+    if (process.env.FILE_STORAGE !== 'r2') {
+      this.app.use('/files', express.static(LOCAL_UPLOAD_DIR))
+    }
 
     const routes: BaseRoute[] = [
       new AuthRoutes(),

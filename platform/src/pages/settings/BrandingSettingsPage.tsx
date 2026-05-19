@@ -32,8 +32,8 @@ export default function BrandingSettingsPage() {
       setSubhead(org.data.careersHeroSubheadline ?? '')
       setCta(org.data.careersCtaLabel)
       const t = org.data.careersHeroBgType
-      if (t === 'solid' || t === 'image') setBg(t)
-      else setBg('pattern1')
+      if (t === 'solid' || t === 'image' || t === 'pattern1') setBg(t)
+      else setBg('pattern2')
     }
   }, [org.data])
 

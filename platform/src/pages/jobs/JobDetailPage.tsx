@@ -6,6 +6,7 @@ import { AlertTriangle, BarChart3, Copy, ExternalLink, Kanban, List, MoreHorizon
 import { jobsApi } from '../../api/jobs.api'
 import { applicationsApi } from '../../api/applications.api'
 import { candidatesApi } from '../../api/candidates.api'
+import { orgsApi } from '../../api/orgs.api'
 import { useOrgId } from '../../hooks/useOrg'
 import { usePermission } from '../../hooks/usePermission'
 import Spinner from '../../components/ui/Spinner'
@@ -30,11 +31,13 @@ export default function JobDetailPage() {
   const qc = useQueryClient()
   const { can } = usePermission()
   const [view, setView] = useState<ViewMode>('pipeline')
+  const [copied, setCopied] = useState(false)
 
   const job = useQuery({ queryKey: ['jobs', orgId, jobId], queryFn: () => jobsApi.get(orgId, jobId) })
+  const org = useQuery({ queryKey: ['orgs', orgId], queryFn: () => orgsApi.get(orgId) })
   const apps = useQuery({
     queryKey: ['applications', 'job', jobId],
-    queryFn: () => applicationsApi.listByJob(orgId, jobId, { page: 1, limit: 200 }),
+    queryFn: () => applicationsApi.listByJob(orgId, jobId, { page: 1, limit: 100 }),
     enabled: !!jobId,
   })
   const candidateIds = apps.data?.data.map((a) => a.candidateId) ?? []
@@ -76,6 +79,15 @@ export default function JobDetailPage() {
   if (job.isLoading) return <Spinner block />
   if (!job.data) return <div className="p-7 text-rose-ink">Job not found.</div>
   const j = job.data
+  const publicBase = (import.meta.env.VITE_PUBLIC_APP_URL ?? 'http://localhost:3001').replace(/\/$/, '')
+  const careersUrl = org.data ? `${publicBase}/careers/${org.data.slug}/${jobId}` : null
+  const openCareers = () => { if (careersUrl) window.open(careersUrl, '_blank', 'noopener,noreferrer') }
+  const copyLink = async () => {
+    if (!careersUrl) return
+    try { await navigator.clipboard.writeText(careersUrl) } catch { return }
+    setCopied(true)
+    setTimeout(() => setCopied(false), 1500)
+  }
 
   return (
     <div className="page-wide">
@@ -93,8 +105,8 @@ export default function JobDetailPage() {
             {j.status === 'draft' && can.manageJobs && (
               <Button variant="primary" onClick={() => publish.mutate()} loading={publish.isPending}>Publish</Button>
             )}
-            <Button><ExternalLink size={14} /> Careers page</Button>
-            <Button variant="secondary"><Copy size={14} /> Copy link</Button>
+            <Button onClick={openCareers} disabled={!careersUrl}><ExternalLink size={14} /> Careers page</Button>
+            <Button variant="secondary" onClick={copyLink} disabled={!careersUrl}><Copy size={14} /> {copied ? 'Copied!' : 'Copy link'}</Button>
             <Button variant="secondary" size="icon"><MoreHorizontal size={14} /></Button>
           </div>
         </div>

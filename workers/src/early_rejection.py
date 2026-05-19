@@ -94,15 +94,15 @@ class EarlyRejectionWorker(BaseWorker):
         result = json.loads(raw)
         return bool(result.get("rejected", False))
 
-    def _publish_to_parser(self, application_id: str, job_id: str, org_id: str, resume_url: str) -> None:
+    def _publish_to_parser(self, application_id, job_id, org_id, resume_url) -> None:
         r = get_redis()
         r.xadd(
             "hira:jobs:parse_resume",
             {
-                "application_id": json.dumps(application_id),
-                "job_id": json.dumps(job_id),
-                "org_id": json.dumps(org_id),
-                "resume_url": json.dumps(resume_url),
+                "application_id": json.dumps(str(application_id)),
+                "job_id": json.dumps(str(job_id)),
+                "org_id": json.dumps(str(org_id)),
+                "resume_url": json.dumps(str(resume_url)),
             },
         )
 

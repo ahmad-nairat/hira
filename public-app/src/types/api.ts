@@ -20,7 +20,7 @@ export type OrgBranding = {
   careersLogoUrl: string | null
   careersHeroHeadline: string | null
   careersHeroSubheadline: string | null
-  careersHeroBgType: 'solid' | 'image' | 'pattern'
+  careersHeroBgType: 'solid' | 'image' | 'pattern1' | 'pattern2'
   careersHeroBgValue: string | null
   careersCtaLabel: string
 }

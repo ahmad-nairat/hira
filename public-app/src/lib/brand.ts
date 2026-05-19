@@ -38,9 +38,14 @@ export function heroBackground(org: OrgBranding): CSSProperties {
       backgroundPosition: 'center',
     }
   }
-  if (org.careersHeroBgType === 'pattern') {
+  if (org.careersHeroBgType === 'pattern1') {
     return {
       background: `radial-gradient(120% 60% at 20% 20%, ${primary} 0%, ${secondary} 100%)`,
+    }
+  }
+  if (org.careersHeroBgType === 'pattern2') {
+    return {
+      background: `linear-gradient(135deg, ${primary} 0%, #1a1a1f 100%)`
     }
   }
   // solid (default) — use a subtle gradient on top of the primary for depth

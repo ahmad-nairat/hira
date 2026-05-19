@@ -6,7 +6,7 @@ from pdfminer.layout import LAParams
 
 from base_worker import BaseWorker
 from services.redis_client import get_redis
-from services.r2_client import download_file, url_to_key
+from services.file_client import download_resume
 from services.openai_client import chat
 from db.queries import get_application, update_candidate_parsed_profile
 
@@ -28,8 +28,7 @@ class ResumeParserWorker(BaseWorker):
             logger.warning(f"application {application_id} not found")
             return
 
-        resume_key = url_to_key(resume_url)
-        file_bytes = download_file(resume_key)
+        file_bytes = download_resume(resume_url)
         resume_text = self._extract_text(file_bytes)
 
         system_prompt = (

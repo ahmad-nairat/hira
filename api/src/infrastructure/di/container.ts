@@ -25,6 +25,7 @@ import { JobAnalysisRepo } from '../repos/job-analysis.repo'
 
 import { RedisQueueService } from '../services/queue.service'
 import { R2FileService } from '../services/file.service'
+import { LocalFileService } from '../services/local-file.service'
 import { NodemailerMailService } from '../services/mail.service'
 import { SseService } from '../services/sse.service'
 
@@ -49,7 +50,10 @@ container.register(TOKENS.INotificationRepo, { useClass: NotificationRepo })
 container.register(TOKENS.IJobAnalysisRepo, { useClass: JobAnalysisRepo })
 
 container.registerSingleton(TOKENS.IQueueService, RedisQueueService)
-container.registerSingleton(TOKENS.IFileService, R2FileService)
+container.registerSingleton(
+  TOKENS.IFileService,
+  process.env.FILE_STORAGE === 'r2' ? R2FileService : LocalFileService,
+)
 container.registerSingleton(TOKENS.IMailService, NodemailerMailService)
 container.registerSingleton(TOKENS.ISseService, SseService)
 

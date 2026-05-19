@@ -17,7 +17,7 @@ def get_application(application_id: str) -> Optional[dict]:
     with get_session() as s:
         row = s.execute(
             text("""
-                SELECT a.*, c.email AS candidate_email, c.full_name AS candidate_name,
+                SELECT a.*,
                        c."parsedSkills" AS parsed_skills,
                        c."parsedExperience" AS parsed_experience,
                        c."parsedEducation" AS parsed_education,
@@ -35,7 +35,7 @@ def get_applications_in_stages(job_id: str, stages: list[str]) -> list[dict]:
     with get_session() as s:
         rows = s.execute(
             text("""
-                SELECT a.*, c.email AS candidate_email, c.full_name AS candidate_name,
+                SELECT a.*,
                        c."parsedSkills" AS parsed_skills,
                        c."parsedExperience" AS parsed_experience,
                        c."parsedEducation" AS parsed_education,

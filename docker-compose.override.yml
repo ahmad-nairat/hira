@@ -1,0 +1,34 @@
+# Auto-loaded by `docker compose up` for local dev. Overlays hot-reload
+# bind mounts onto the production-oriented base compose file.
+# To run a clean prod-style build, use `docker compose -f docker-compose.yml up`.
+
+services:
+  api:
+    build:
+      target: dev
+    command: npm run dev
+    volumes:
+      - ./api/src:/app/src
+      - ./api/tsconfig.json:/app/tsconfig.json
+      - ./api/package.json:/app/package.json
+      - api-uploads:/app/uploads
+      # Anonymous volume keeps the image's node_modules from being shadowed by host.
+      - /app/node_modules
+
+  platform:
+    build:
+      target: dev
+    command: npm run dev -- --host
+    environment:
+      VITE_API_URL: ${VITE_API_URL:-http://localhost:3010/api/v1}
+      VITE_PUBLIC_APP_URL: ${VITE_PUBLIC_APP_URL:-http://localhost:3001}
+    volumes:
+      - ./platform/src:/app/src
+      - ./platform/public:/app/public
+      - ./platform/index.html:/app/index.html
+      - ./platform/vite.config.ts:/app/vite.config.ts
+      - ./platform/tailwind.config.ts:/app/tailwind.config.ts
+      - ./platform/postcss.config.js:/app/postcss.config.js
+      - ./platform/tsconfig.json:/app/tsconfig.json
+      - ./platform/package.json:/app/package.json
+      - /app/node_modules

@@ -18,7 +18,7 @@ export const UpdateBrandingSchema = z.object({
   careersLogoUrl: z.string().url().nullable().optional(),
   careersHeroHeadline: z.string().max(255).nullable().optional(),
   careersHeroSubheadline: z.string().max(500).nullable().optional(),
-  careersHeroBgType: z.enum(['solid', 'image', 'pattern']).optional(),
+  careersHeroBgType: z.enum(['solid', 'image', 'pattern1', 'pattern2']).optional(),
   careersHeroBgValue: z.string().max(500).nullable().optional(),
   careersCtaLabel: z.string().max(100).optional(),
   primaryColor: z.string().regex(/^#[0-9a-fA-F]{6}$/).optional(),

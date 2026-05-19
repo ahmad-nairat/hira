@@ -4,6 +4,10 @@ import { z } from 'zod'
 
 dotenv.config()
 
+import './infrastructure/di/container'
+import { AppDataSource } from './infrastructure/database/data-source'
+import { AppServer } from './API'
+
 const EnvSchema = z.object({
   NODE_ENV: z.enum(['development', 'production', 'test']).default('development'),
   PORT: z.string().default('3000'),
@@ -37,16 +41,12 @@ async function bootstrap(): Promise<void> {
     process.exit(1)
   }
 
-  await import('./infrastructure/di/container')
-
-  const { AppDataSource } = await import('./infrastructure/database/data-source')
   await AppDataSource.initialize()
   if (process.env.NODE_ENV === 'production') {
     await AppDataSource.runMigrations()
   }
   console.log('[hira-api] database connected')
 
-  const { AppServer } = await import('./API')
   new AppServer().listen(Number(env.data.PORT))
 
   const shutdown = async (signal: string): Promise<void> => {

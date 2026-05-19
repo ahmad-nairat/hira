@@ -59,6 +59,10 @@ services:
       R2_SECRET_ACCESS_KEY: ${R2_SECRET_ACCESS_KEY}
       R2_BUCKET: ${R2_BUCKET:-hira-uploads}
       R2_PUBLIC_URL: ${R2_PUBLIC_URL}
+      # FILE_STORAGE: r2 → upload to Cloudflare R2 using R2_* above.
+      # Anything else (default) → write to local disk, served at /files.
+      FILE_STORAGE: ${FILE_STORAGE:-local}
+      API_PUBLIC_URL: ${API_PUBLIC_URL:-http://localhost:3010}
       SMTP_HOST: ${SMTP_HOST}
       SMTP_PORT: ${SMTP_PORT:-587}
       SMTP_USER: ${SMTP_USER}
@@ -69,6 +73,8 @@ services:
       GOOGLE_CALLBACK_URL: ${GOOGLE_CALLBACK_URL}
     ports:
       - "${API_PORT:-3000}:3000"
+    volumes:
+      - api-uploads:/app/uploads
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://localhost:3000/health || exit 1"]
       interval: 10s
@@ -96,6 +102,9 @@ services:
       R2_SECRET_ACCESS_KEY: ${R2_SECRET_ACCESS_KEY}
       R2_BUCKET: ${R2_BUCKET:-hira-uploads}
       R2_PUBLIC_URL: ${R2_PUBLIC_URL}
+      FILE_STORAGE: ${FILE_STORAGE:-local}
+      API_PUBLIC_URL: ${API_PUBLIC_URL:-http://localhost:3010}
+      INTERNAL_API_URL: http://api:3000
 
   platform:
     build:
@@ -103,6 +112,7 @@ services:
       dockerfile: Dockerfile
       args:
         VITE_API_URL: ${VITE_API_URL:-http://localhost:3010/api/v1}
+        VITE_PUBLIC_APP_URL: ${VITE_PUBLIC_APP_URL:-http://localhost:3001}
     restart: unless-stopped
     depends_on:
       - api
@@ -130,3 +140,4 @@ services:
 volumes:
   postgres-data:
   redis-data:
+  api-uploads:
