@@ -1,8 +1,10 @@
 import { NavLink } from 'react-router-dom'
+import { useQuery } from '@tanstack/react-query'
 import clsx from 'clsx'
 import { Briefcase, Calendar, Home, Settings, Users, ChevronUp, MoreHorizontal } from 'lucide-react'
 import { useAuth } from '../../hooks/useAuth'
 import { usePermission } from '../../hooks/usePermission'
+import { orgsApi } from '../../api/orgs.api'
 import { formatRole, avTint, initials } from '../../utils/format'
 
 interface Props { collapsed: boolean }
@@ -10,6 +12,12 @@ interface Props { collapsed: boolean }
 export default function Sidebar({ collapsed }: Props) {
   const { user, membership } = useAuth()
   const { can, isInterviewerOnly } = usePermission()
+  const org = useQuery({
+    queryKey: ['orgs', membership?.orgId],
+    queryFn: () => orgsApi.get(membership!.orgId),
+    enabled: !!membership?.orgId,
+  })
+  const orgName = org.data?.name ?? 'Workspace'
 
   const items = [
     !isInterviewerOnly && { to: '/', label: 'Dashboard', icon: Home, end: true },
@@ -43,11 +51,11 @@ export default function Sidebar({ collapsed }: Props) {
 
       <div className="p-2.5 border-t border-border-soft flex flex-col gap-1.5">
         <NavLink to="/settings/general" className="flex items-center gap-2.5 px-2 py-1.5 rounded-lg hover:bg-surface hover:border-border-soft border border-transparent transition-colors">
-          <span className={clsx('avatar avatar-sm avatar-square', avTint('Northwind Org'))}>N</span>
+          <span className={clsx('avatar avatar-sm avatar-square', avTint(orgName))}>{initials(orgName)}</span>
           {!collapsed && (
             <>
               <span className="flex flex-col min-w-0 flex-1 text-left">
-                <span className="text-[13px] font-medium truncate">Hira Demo</span>
+                <span className="text-[13px] font-medium truncate">{orgName}</span>
                 <span className="text-[11px] text-ink-4 truncate">Workspace</span>
               </span>
               <ChevronUp size={14} className="text-ink-4" />
