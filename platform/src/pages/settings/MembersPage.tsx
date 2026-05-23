@@ -47,7 +47,7 @@ export default function MembersPage() {
               <tr key={m.id} className="border-b border-border-soft last:border-b-0">
                 <td className="px-3.5 py-3.5">
                   <div className="flex items-center gap-2">
-                    <Avatar size="sm" name={m.user?.fullName} />
+                    <Avatar size="sm" name={m.user?.fullName} src={m.user?.avatarUrl} />
                     <div>
                       <div className="text-sm font-medium">{m.user?.fullName ?? '—'}</div>
                       <div className="text-ink-4 text-xs">{m.user?.email ?? '—'}</div>

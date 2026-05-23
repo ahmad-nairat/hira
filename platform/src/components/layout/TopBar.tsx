@@ -35,7 +35,7 @@ export default function TopBar({ onToggleSidebar, onOpenNotifs }: Props) {
           {unread > 0 ? <span className="absolute top-[7px] right-2 w-[7px] h-[7px] rounded-full bg-primary border-[1.5px] border-bg-app" /> : null}
         </button>
         <button className="icon-btn" onClick={() => navigate('/profile')} title="Profile">
-          <Avatar name={user?.fullName} size="sm" className="!w-6 !h-6 text-[9.5px]" />
+          <Avatar name={user?.fullName} src={user?.avatarUrl} size="sm" className="!w-6 !h-6 text-[9.5px]" />
         </button>
       </div>
 

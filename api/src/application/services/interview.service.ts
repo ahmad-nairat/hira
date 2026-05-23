@@ -39,6 +39,20 @@ export class InterviewService {
     return interviews.map(toReadInterviewDTO)
   }
 
+  /**
+   * Lists all interviews scheduled for a specific application, with feedback
+   * embedded. Used by the application detail page so admins/recruiters/HMs
+   * can act on interviewer feedback (move stage, approve, reject) without
+   * leaving the page.
+   */
+  async listByApplication(applicationId: string, membership: Membership): Promise<ReadInterviewDTO[]> {
+    const app = await this.appRepo.findById(applicationId)
+    if (!app) throw new NotFoundError('Application')
+    if (app.orgId !== membership.orgId) throw new ForbiddenError()
+    const interviews = await this.interviewRepo.findByApplication(applicationId)
+    return interviews.map(toReadInterviewDTO)
+  }
+
   async findById(interviewId: string, membership: Membership): Promise<ReadInterviewDTO> {
     const i = await this.interviewRepo.findById(interviewId)
     if (!i) throw new NotFoundError('Interview')

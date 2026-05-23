@@ -12,6 +12,7 @@ import {
   PublicOrgBrandingDTO,
 } from '../../core/dtos/public.dto'
 import { toReadJobFormDTO, ReadJobFormDTO } from '../../core/dtos/job-form.dto'
+import { buildFormAnswers } from '../../core/dtos/application.dto'
 import { Job } from '../../core/entities/job.entity'
 import { Org } from '../../core/entities/org.entity'
 import { JobFormField } from '../../core/entities/job-form-field.entity'
@@ -109,7 +110,7 @@ export class PublicService {
     await this.applicationService.ingestPublicApplication({
       orgId: org.id,
       jobId,
-      formAnswers: rawAnswers,
+      formAnswers: buildFormAnswers(form.fields, rawAnswers),
       candidate: { email, fullName, phone },
       resumeBuffer,
       resumeExt,

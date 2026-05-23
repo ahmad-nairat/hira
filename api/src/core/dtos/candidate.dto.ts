@@ -53,11 +53,15 @@ export interface ReadCandidateDTO {
   parsedExperience: Array<{ title: string; company: string; start: string; end?: string; description?: string }>
   parsedEducation: Array<{ degree: string; institution: string; year?: string }>
   parsedCerts: Array<{ name: string; issuer?: string; year?: string }>
+  // URL of the most recently submitted application's resume, or null if the
+  // candidate has no application yet. The candidate page exposes a "View resume"
+  // button driven off this field.
+  latestResumeUrl: string | null
   createdAt: string
   updatedAt: string
 }
 
-export function toReadCandidateDTO(c: Candidate): ReadCandidateDTO {
+export function toReadCandidateDTO(c: Candidate, latestResumeUrl: string | null = null): ReadCandidateDTO {
   return {
     id: c.id,
     orgId: c.orgId,
@@ -72,6 +76,7 @@ export function toReadCandidateDTO(c: Candidate): ReadCandidateDTO {
     parsedExperience: c.parsedExperience ?? [],
     parsedEducation: c.parsedEducation ?? [],
     parsedCerts: c.parsedCerts ?? [],
+    latestResumeUrl,
     createdAt: c.createdAt.toISOString(),
     updatedAt: c.updatedAt.toISOString(),
   }

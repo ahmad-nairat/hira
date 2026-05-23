@@ -1,23 +1,54 @@
+import { useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useMutation } from '@tanstack/react-query'
 import { LogOut, Upload } from 'lucide-react'
 import { authApi } from '../../api/auth.api'
+import { extractError } from '../../api/client'
 import { useAuthStore } from '../../stores/auth.store'
 import { useAuth } from '../../hooks/useAuth'
 import Avatar from '../../components/ui/Avatar'
 import Button from '../../components/ui/Button'
 import Input from '../../components/ui/Input'
 import { formatRole } from '../../utils/format'
+import type { ReadUserDTO } from '../../types/api'
+
+const AVATAR_MAX_BYTES = 1 * 1024 * 1024
+const AVATAR_ACCEPT = 'image/png,image/jpeg'
 
 export default function ProfilePage() {
   const { user, membership } = useAuth()
+  const setUser = useAuthStore((s) => s.setUser)
   const logout = useAuthStore((s) => s.logout)
   const navigate = useNavigate()
+  const fileInputRef = useRef<HTMLInputElement>(null)
+  const [avatarError, setAvatarError] = useState<string | null>(null)
 
   const signOut = useMutation({
     mutationFn: () => authApi.logout(),
     onSettled: () => { logout(); navigate('/login') },
   })
+
+  const uploadAvatar = useMutation({
+    mutationFn: (file: File) => authApi.uploadAvatar(file),
+    onSuccess: (u: ReadUserDTO) => { setUser(u); setAvatarError(null) },
+    onError: (e) => setAvatarError(extractError(e)),
+  })
+  const removeAvatar = useMutation({
+    mutationFn: () => authApi.removeAvatar(),
+    onSuccess: (u: ReadUserDTO) => { setUser(u); setAvatarError(null) },
+    onError: (e) => setAvatarError(extractError(e)),
+  })
+
+  const onPickFile = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    e.target.value = ''
+    if (!file) return
+    if (file.size > AVATAR_MAX_BYTES) { setAvatarError('Image must be 1 MB or smaller.'); return }
+    if (!['image/png', 'image/jpeg'].includes(file.type)) { setAvatarError('Image must be a PNG or JPG.'); return }
+    uploadAvatar.mutate(file)
+  }
+
+  const busy = uploadAvatar.isPending || removeAvatar.isPending
 
   return (
     <div className="max-w-[880px] mx-auto p-8">
@@ -29,9 +60,23 @@ export default function ProfilePage() {
         <div className="flex items-center gap-3 mb-[18px]">
           <Avatar size="xl" name={user?.fullName} src={user?.avatarUrl} />
           <div>
-            <Button variant="secondary"><Upload size={13} /> Upload avatar</Button>
-            <Button className="ml-1.5 text-ink-3">Remove</Button>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept={AVATAR_ACCEPT}
+              className="hidden"
+              onChange={onPickFile}
+            />
+            <Button variant="secondary" onClick={() => fileInputRef.current?.click()} loading={uploadAvatar.isPending} disabled={busy}>
+              <Upload size={13} /> Upload avatar
+            </Button>
+            {user?.avatarUrl ? (
+              <Button className="ml-1.5 text-ink-3" onClick={() => removeAvatar.mutate()} loading={removeAvatar.isPending} disabled={busy}>
+                Remove
+              </Button>
+            ) : null}
             <div className="text-ink-4 text-xs mt-1.5">PNG or JPG · 1 MB max</div>
+            {avatarError ? <div className="text-rose-ink text-xs mt-1">{avatarError}</div> : null}
           </div>
         </div>
         <Input label="Full name" defaultValue={user?.fullName ?? ''} />

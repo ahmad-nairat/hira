@@ -150,7 +150,7 @@
   .tag { @apply inline-flex items-center gap-1.5 px-2.5 py-1 bg-surface-2 border border-border-soft rounded-md text-xs text-ink-2; }
 
   /* Note card */
-  .note-card { @apply px-3.5 py-3 bg-surface-2 border border-border-soft rounded-lg; }
+  .note-card { @apply px-3.5 py-3 bg-surface-2 border border-border-soft rounded-lg; overflow: hidden }
 
   /* Icon tile */
   .icon-tile { @apply w-9 h-9 rounded-lg bg-surface-2 border border-border-soft inline-flex items-center justify-center text-ink-3 shrink-0; }
@@ -252,4 +252,23 @@
     @apply min-h-screen flex items-center justify-center p-10;
     background: radial-gradient(at top, #1a1830 0%, #0E0E14 50%);
   }
+
+  /* Rendered markdown for the JD preview pane (recruiter platform).
+     Mirrors the careers-page `.job-prose` class but tuned for dark surfaces. */
+  .job-prose { @apply text-ink-2 text-sm leading-relaxed; }
+  .job-prose h1 { @apply text-ink text-lg font-semibold mt-4 mb-2 first:mt-0; }
+  .job-prose h2 { @apply text-ink text-[15px] font-semibold mt-4 mb-1.5 first:mt-0; }
+  .job-prose h3 { @apply text-ink text-sm font-semibold mt-3 mb-1; }
+  .job-prose p  { @apply my-2; }
+  .job-prose ul { @apply list-disc pl-5 my-2 space-y-1; }
+  .job-prose ol { @apply list-decimal pl-5 my-2 space-y-1; }
+  .job-prose li { @apply text-ink-2; }
+  .job-prose a  { @apply text-primary underline; }
+  .job-prose strong { @apply text-ink font-semibold; }
+  .job-prose em { @apply italic; }
+  .job-prose code { @apply px-1 py-0.5 rounded bg-surface-2 text-ink font-mono text-xs; }
+  .job-prose pre { @apply my-2 p-3 rounded bg-surface-2 overflow-x-auto; }
+  .job-prose pre code { @apply bg-transparent p-0; }
+  .job-prose blockquote { @apply border-l-2 border-border-soft pl-3 text-ink-3 my-2; }
+  .job-prose hr { @apply my-3 border-border-soft; }
 }

@@ -1,8 +1,10 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import clsx from 'clsx'
 import { ArrowLeft } from 'lucide-react'
+import { marked } from 'marked'
+import DOMPurify from 'dompurify'
 import { jobsApi } from '../../api/jobs.api'
 import { jobFormApi } from '../../api/job-form.api'
 import { useOrgId } from '../../hooks/useOrg'
@@ -28,6 +30,7 @@ export default function JobSettingsPage() {
   const navigate = useNavigate()
   const qc = useQueryClient()
   const [tab, setTab] = useState<TabId>('general')
+  const [descMode, setDescMode] = useState<'edit' | 'preview'>('edit')
   const job = useQuery({ queryKey: ['jobs', orgId, jobId], queryFn: () => jobsApi.get(orgId, jobId) })
   const form = useQuery({ queryKey: ['job-form', jobId], queryFn: () => jobFormApi.get(orgId, jobId) })
   const [patch, setPatch] = useState<Partial<ReadJobDTO>>({})
@@ -50,6 +53,15 @@ export default function JobSettingsPage() {
   const set = <K extends keyof ReadJobDTO>(k: K, v: ReadJobDTO[K]) => setPatch({ ...patch, [k]: v })
   const val = <K extends keyof ReadJobDTO>(k: K): ReadJobDTO[K] => (patch[k] !== undefined ? (patch[k] as ReadJobDTO[K]) : j[k])
 
+  // Render the recruiter's markdown description for the preview pane. marked is
+  // synchronous when given a string; we sanitize the output because the same
+  // HTML eventually reaches the candidate-facing careers page.
+  const descriptionHtml = useMemo(() => {
+    const md = (val('description') as string) || ''
+    const html = marked.parse(md, { gfm: true, breaks: true, async: false }) as string
+    return DOMPurify.sanitize(html, { USE_PROFILES: { html: true } })
+  }, [val('description')])
+
   return (
     <div className="p-7">
       <Link to={`/jobs/${jobId}`} className="btn btn-ghost btn-sm mb-4 pl-1"><ArrowLeft size={14} /> Back to job</Link>
@@ -66,7 +78,32 @@ export default function JobSettingsPage() {
               <div className="font-serif font-medium text-[22px] mb-4">Edit job <span className="ital">details</span></div>
               <Input label="Title" value={val('title') as string} onChange={(e) => set('title', e.target.value)} />
               <div className="mt-3.5">
-                <Textarea label="Description" rows={8} value={val('description') as string} onChange={(e) => set('description', e.target.value)} />
+                <div className="flex items-center justify-between mb-1.5">
+                  <label className="mono-label">Description</label>
+                  <div className="inline-flex rounded-md border border-border-soft overflow-hidden text-xs">
+                    <button
+                      type="button"
+                      onClick={() => setDescMode('edit')}
+                      className={clsx('px-2.5 py-1', descMode === 'edit' ? 'bg-surface-2 text-ink' : 'text-ink-4 hover:text-ink-2')}
+                    >Edit</button>
+                    <button
+                      type="button"
+                      onClick={() => setDescMode('preview')}
+                      className={clsx('px-2.5 py-1 border-l border-border-soft', descMode === 'preview' ? 'bg-surface-2 text-ink' : 'text-ink-4 hover:text-ink-2')}
+                    >Preview</button>
+                  </div>
+                </div>
+                {descMode === 'edit' ? (
+                  <Textarea rows={8} value={val('description') as string} onChange={(e) => set('description', e.target.value)} />
+                ) : (
+                  <div
+                    className="job-prose min-h-[200px] rounded-md border border-border-soft px-3 py-2.5 bg-surface"
+                    dangerouslySetInnerHTML={{ __html: descriptionHtml }}
+                  />
+                )}
+                {descMode === 'preview' && !((val('description') as string) || '').trim() && (
+                  <div className="text-ink-4 text-sm italic mt-1">No description yet — switch back to Edit to write one.</div>
+                )}
               </div>
               <div className="grid grid-cols-2 gap-3.5 mt-3.5">
                 <Input label="Location" value={val('location') as string} onChange={(e) => set('location', e.target.value)} />

@@ -61,8 +61,18 @@ export class JobService {
     const changesPublic = publicFacing.some((f) => f in dto)
     const patch: Record<string, unknown> = { ...dto }
 
-    if (job.status === JobStatus.PUBLISHED) {
-      if (changesPublic) patch.status = JobStatus.DRAFT
+    // Drop a live job back to draft when its public-facing surface changes.
+    if (job.status === JobStatus.PUBLISHED && changesPublic) {
+      patch.status = JobStatus.DRAFT
+    }
+    // Stale-flags apply whenever the job has applications that may have been
+    // scored/screened under the previous AI settings. A job acquires that
+    // population the moment it is first published, so `publishedAt != null`
+    // is the right gate — not "is the job currently published?". Editing
+    // criteria/scoring on a draft that was previously published must still
+    // raise the flag, even across multi-PATCH saves where an earlier patch
+    // already flipped the job back to draft.
+    if (job.publishedAt != null) {
       if ('rejectionCriteria' in dto) patch.hasOutdatedRejections = true
       if ('scoringInstructions' in dto || this.scoringWeightChanged(dto)) patch.hasOutdatedScores = true
     }
@@ -89,12 +99,15 @@ export class JobService {
       publishedAt: job.publishedAt ?? new Date(),
     })
 
+    // Always refresh the structured analysis — it's the source of truth for
+    // the scorer and early-rejection workers, and re-running is cheap.
     await this.queue.publish('hira:jobs:analyze', { job_id: jobId, org_id: membership.orgId })
 
-    if (job.hasOutdatedScores) {
-      await this.queue.publish('hira:jobs:score_bulk', { job_id: jobId, org_id: membership.orgId, bulk: true })
-      await this.jobRepo.update(jobId, { hasOutdatedScores: false })
-    }
+    // Republishing does NOT auto-dispatch bulk rescore or re-evaluation, and
+    // does not clear the outdated flags. The recruiter triggers those
+    // explicitly via the Rescore / Re-evaluate rejections actions, which
+    // gives them control over when the LLM workload runs and lets them
+    // verify their edits look right before paying for a bulk pass.
 
     return toReadJobDTO(updated)
   }

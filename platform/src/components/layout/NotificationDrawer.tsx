@@ -1,4 +1,5 @@
 import { useEffect } from 'react'
+import { Link } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import clsx from 'clsx'
 import { X, Bell, BadgeCheck, Send, ThumbsUp, ThumbsDown } from 'lucide-react'
@@ -7,6 +8,7 @@ import { useOrgId } from '../../hooks/useOrg'
 import { useNotificationStore } from '../../stores/notification.store'
 import Button from '../ui/Button'
 import { formatDateTime } from '../../utils/format'
+import { describeNotification as describe, notificationHref } from '../../utils/notifications'
 import type { ReadNotificationDTO } from '../../types/api'
 
 const ICONS: Record<string, typeof Bell> = {
@@ -15,17 +17,6 @@ const ICONS: Record<string, typeof Bell> = {
   new_feedback: ThumbsUp,
   offer_accepted: Send,
   offer_declined: ThumbsDown,
-}
-
-function describe(n: ReadNotificationDTO): string {
-  switch (n.type) {
-    case 'assignment': return 'You were assigned to an interview.'
-    case 'hm_approval': return 'A candidate was approved by the hiring manager.'
-    case 'new_feedback': return 'New interview feedback was submitted.'
-    case 'offer_accepted': return 'A candidate accepted their offer.'
-    case 'offer_declined': return 'A candidate declined their offer.'
-    default: return 'New notification.'
-  }
 }
 
 interface Props { open: boolean; onClose: () => void }
@@ -53,6 +44,18 @@ export default function NotificationDrawer({ open, onClose }: Props) {
     },
   })
 
+  // Fire-and-forget mark-as-read when a row is clicked. Local store updates
+  // immediately so the unread dot/count disappear before the navigation
+  // completes; the API call follows asynchronously.
+  const handleRowClick = (n: ReadNotificationDTO) => {
+    onClose()
+    if (n.isRead) return
+    markRead([n.id])
+    notificationsApi.markRead(orgId, n.id).catch(() => {
+      // Silently swallow — worst case the count refreshes from the server next list call.
+    })
+  }
+
   return (
     <>
       <div className={clsx('drawer-overlay', open && 'open')} onClick={onClose} />
@@ -75,14 +78,14 @@ export default function NotificationDrawer({ open, onClose }: Props) {
           ) : (
             notifications.map((n) => {
               const Ico = ICONS[n.type] ?? Bell
-              return (
-                <div
-                  key={n.id}
-                  className={clsx(
-                    'flex gap-3 px-[18px] py-3.5 border-b border-border-soft relative',
-                    !n.isRead && 'bg-primary/[0.04]',
-                  )}
-                >
+              const href = notificationHref(n)
+              const rowClass = clsx(
+                'flex gap-3 px-[18px] py-3.5 border-b border-border-soft relative',
+                !n.isRead && 'bg-primary/[0.04]',
+                href && 'hover:bg-surface-2 cursor-pointer',
+              )
+              const inner = (
+                <>
                   {!n.isRead && <span className="absolute left-2 top-[22px] w-1.5 h-1.5 rounded-full bg-primary" />}
                   <div className="icon-tile mt-0.5" style={{ width: 32, height: 32 }}>
                     <Ico size={14} />
@@ -91,6 +94,17 @@ export default function NotificationDrawer({ open, onClose }: Props) {
                     <div className="text-[13px] leading-snug text-ink">{describe(n)}</div>
                     <div className="text-ink-4 text-xs mt-1">{formatDateTime(n.createdAt)}</div>
                   </div>
+                </>
+              )
+              return href ? (
+                <Link key={n.id} to={href} className={rowClass} onClick={() => handleRowClick(n)}>
+                  {inner}
+                </Link>
+              ) : (
+                // Notification has no actionable target (missing payload / unknown type) —
+                // still mark-as-read on click but don't navigate anywhere.
+                <div key={n.id} className={rowClass} onClick={() => handleRowClick(n)}>
+                  {inner}
                 </div>
               )
             })

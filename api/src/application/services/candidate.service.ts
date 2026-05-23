@@ -3,6 +3,7 @@ import { TOKENS } from '../../infrastructure/di/tokens'
 import { ICandidateRepo } from '../../core/repo-interfaces/ICandidateRepo'
 import { IBlacklistRepo } from '../../core/repo-interfaces/IBlacklistRepo'
 import { IJobRepo } from '../../core/repo-interfaces/IJobRepo'
+import { IApplicationRepo } from '../../core/repo-interfaces/IApplicationRepo'
 import {
   CreateCandidateDTO,
   UpdateCandidateDTO,
@@ -24,6 +25,7 @@ export class CandidateService {
     @inject(TOKENS.ICandidateRepo) private readonly candidateRepo: ICandidateRepo,
     @inject(TOKENS.IBlacklistRepo) private readonly blacklistRepo: IBlacklistRepo,
     @inject(TOKENS.IJobRepo) private readonly jobRepo: IJobRepo,
+    @inject(TOKENS.IApplicationRepo) private readonly applicationRepo: IApplicationRepo,
     @inject(TOKENS.IMailService) private readonly mail: IMailService,
   ) {}
 
@@ -36,7 +38,10 @@ export class CandidateService {
     const c = await this.candidateRepo.findById(candidateId)
     if (!c) throw new NotFoundError('Candidate')
     if (c.orgId !== membership.orgId) throw new ForbiddenError()
-    return toReadCandidateDTO(c)
+    // findByCandidate already orders DESC by createdAt; the first row is the latest.
+    const apps = await this.applicationRepo.findByCandidate(candidateId)
+    const latestResumeUrl = apps[0]?.resumeUrl ?? null
+    return toReadCandidateDTO(c, latestResumeUrl)
   }
 
   async create(dto: CreateCandidateDTO, membership: Membership): Promise<ReadCandidateDTO> {

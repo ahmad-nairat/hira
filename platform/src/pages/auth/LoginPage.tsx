@@ -7,10 +7,8 @@ import Button from '../../components/ui/Button'
 import Input from '../../components/ui/Input'
 import { authApi } from '../../api/auth.api'
 import { onboardingApi } from '../../api/onboarding.api'
-import { membersApi } from '../../api/members.api'
 import { useAuthStore } from '../../stores/auth.store'
 import { extractError } from '../../api/client'
-import type { OrgRole } from '../../types/api'
 
 export default function LoginPage() {
   const navigate = useNavigate()
@@ -25,11 +23,11 @@ export default function LoginPage() {
       const data = await authApi.login({ email, password })
       setAuth(data.user, null, data.accessToken)
       const status = await onboardingApi.check()
-      if (status.hasOrg && status.currentOrgId) {
-        const list = await membersApi.list(status.currentOrgId).catch(() => [])
-        const me = list.find((m) => m.userId === data.user.id)
-        const role: OrgRole = me?.role ?? 'recruiter'
-        setMembership({ orgId: status.currentOrgId, role })
+      if (status.hasOrg && status.currentOrgId && status.currentRole) {
+        // The API tells us the caller's role on the membership directly — we
+        // must NOT list members to look it up (admin-only endpoint, would
+        // 403 silently for non-admins and default to admin).
+        setMembership({ orgId: status.currentOrgId, role: status.currentRole })
         navigate('/')
       } else {
         navigate('/onboarding')

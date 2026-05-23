@@ -62,7 +62,7 @@ async function run(): Promise<void> {
   )
 
   const form = await formRepo.save(formRepo.create({ jobId: job.id }))
-  await fieldRepo.save([
+  const [nameField, emailField] = await fieldRepo.save([
     fieldRepo.create({ jobFormId: form.id, type: FieldType.TEXT, label: 'Full Name', isRequired: true, isResume: false, sortOrder: 0 }),
     fieldRepo.create({ jobFormId: form.id, type: FieldType.TEXT, label: 'Email', isRequired: true, isResume: false, sortOrder: 1 }),
     fieldRepo.create({ jobFormId: form.id, type: FieldType.FILE, label: 'Resume', isRequired: true, isResume: true, sortOrder: 2 }),
@@ -79,7 +79,10 @@ async function run(): Promise<void> {
         jobId: job.id,
         candidateId: c.id,
         orgId: org.id,
-        formAnswers: { name: c.fullName, email: c.email },
+        formAnswers: [
+          { id: nameField.id, question: nameField.label, type: nameField.type, answer: c.fullName },
+          { id: emailField.id, question: emailField.label, type: emailField.type, answer: c.email },
+        ],
         resumeUrl: `https://example.com/resumes/${c.id}.pdf`,
         currentStage: PipelineStage.SCREENING,
         score: 80,

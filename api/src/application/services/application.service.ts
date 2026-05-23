@@ -6,9 +6,10 @@ import { IOfferRepo } from '../../core/repo-interfaces/IOfferRepo'
 import { ICandidateRepo } from '../../core/repo-interfaces/ICandidateRepo'
 import { IJobRepo } from '../../core/repo-interfaces/IJobRepo'
 import { IBlacklistRepo } from '../../core/repo-interfaces/IBlacklistRepo'
+import { IJobFormRepo } from '../../core/repo-interfaces/IJobFormRepo'
 import { IFileService } from '../../infrastructure/services/file.service'
 import { IQueueService } from '../../infrastructure/services/queue.service'
-import { Application, PipelineStage } from '../../core/entities/application.entity'
+import { Application, FormAnswer, PipelineStage } from '../../core/entities/application.entity'
 import { OfferStatus } from '../../core/entities/offer.entity'
 import { OrgRole } from '../../core/entities/org-membership.entity'
 import { CandidateSource } from '../../core/entities/candidate.entity'
@@ -17,6 +18,7 @@ import {
   InterviewerApplicationDTO,
   toReadApplicationDTO,
   toInterviewerApplicationDTO,
+  buildFormAnswers,
   ApplicationQueryDTO,
 } from '../../core/dtos/application.dto'
 import {
@@ -71,9 +73,10 @@ export class ApplicationService {
     @inject(TOKENS.IJobRepo) private readonly jobRepo: IJobRepo,
     @inject(TOKENS.ICandidateRepo) private readonly candidateRepo: ICandidateRepo,
     @inject(TOKENS.IBlacklistRepo) private readonly blacklistRepo: IBlacklistRepo,
+    @inject(TOKENS.IJobFormRepo) private readonly jobFormRepo: IJobFormRepo,
     @inject(TOKENS.IFileService) private readonly fileService: IFileService,
     @inject(TOKENS.IQueueService) private readonly queue: IQueueService,
-  ) {}
+  ) { }
 
   async findByJob(jobId: string, query: ApplicationQueryDTO, membership: Membership) {
     const job = await this.jobRepo.findById(jobId)
@@ -89,18 +92,23 @@ export class ApplicationService {
   }
 
   async findById(applicationId: string, membership: Membership): Promise<ReadApplicationDTO | InterviewerApplicationDTO> {
-    const app = await this.appRepo.findById(applicationId)
-    if (!app) throw new NotFoundError('Application')
-    if (app.orgId !== membership.orgId) throw new ForbiddenError()
+    const jobApplication = await this.appRepo.findById(applicationId)
+    if (!jobApplication) throw new NotFoundError('Application')
+    // TODO: scope the query instead
+    if (jobApplication.orgId !== membership.orgId) throw new ForbiddenError()
+
     if (membership.role === OrgRole.INTERVIEWER) {
-      const allowed = app.currentStage === PipelineStage.INTERVIEW || app.currentStage === PipelineStage.SPECIALIST_INTERVIEW
+      const { currentStage, interviews } = jobApplication
+      const allowed = interviews.some((interview) =>
+        (interview.stage as string === currentStage as string && interview.interviewerId === membership.userId)
+      )
       if (!allowed) throw new ForbiddenError('Application not visible at this stage')
-      return toInterviewerApplicationDTO(app)
+      return toInterviewerApplicationDTO(jobApplication)
     }
-    return toReadApplicationDTO(app)
+    return toReadApplicationDTO(jobApplication)
   }
 
-  async createManual(jobId: string, candidateId: string, formAnswers: Record<string, unknown>, resumeUrl: string, membership: Membership): Promise<ReadApplicationDTO> {
+  async createManual(jobId: string, candidateId: string, rawFormAnswers: Record<string, unknown>, resumeUrl: string, membership: Membership): Promise<ReadApplicationDTO> {
     if (membership.role !== OrgRole.ADMIN && membership.role !== OrgRole.RECRUITER) {
       throw new ForbiddenError('Only admins or recruiters can add applications')
     }
@@ -117,6 +125,11 @@ export class ApplicationService {
 
     const blacklisted = await this.blacklistRepo.findActive(membership.orgId, candidateId)
     const stage = blacklisted ? PipelineStage.BLACKLISTED : PipelineStage.AI_EVALUATION
+
+    // Denormalise the raw { fieldId: answer } map against the job form so the answers
+    // are self-describing and never need a form re-fetch on read.
+    const form = await this.jobFormRepo.findByJob(jobId)
+    const formAnswers = form ? buildFormAnswers(form.fields, rawFormAnswers) : []
 
     const app = await this.appRepo.create({
       jobId,
@@ -247,7 +260,7 @@ export class ApplicationService {
   async ingestPublicApplication(params: {
     orgId: string
     jobId: string
-    formAnswers: Record<string, unknown>
+    formAnswers: FormAnswer[]
     candidate: { email: string; fullName: string; phone?: string | null }
     resumeBuffer: Buffer
     resumeExt: string

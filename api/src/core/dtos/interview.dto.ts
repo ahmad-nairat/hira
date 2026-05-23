@@ -37,6 +37,10 @@ export interface ReadInterviewDTO {
   orgId: string
   stage: InterviewStage
   interviewerId: string
+  // Optional fields — populated by the application-scoped listing so the
+  // application detail page can render feedback inline without N+1 fetches.
+  interviewerName?: string
+  feedback?: ReadInterviewFeedbackDTO | null
   scheduledAt: string | null
   meetingType: MeetingType
   meetingLink: string | null
@@ -54,6 +58,8 @@ export function toReadInterviewDTO(i: Interview): ReadInterviewDTO {
     orgId: i.orgId,
     stage: i.stage,
     interviewerId: i.interviewerId,
+    interviewerName: i.interviewer?.fullName,
+    feedback: i.feedback ? toReadInterviewFeedbackDTO(i.feedback) : null,
     scheduledAt: i.scheduledAt?.toISOString() ?? null,
     meetingType: i.meetingType,
     meetingLink: i.meetingLink,

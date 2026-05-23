@@ -1,10 +1,10 @@
-import { Application, PipelineStage } from '../entities/application.entity'
+import { Application, FormAnswer, PipelineStage } from '../entities/application.entity'
 
 export interface CreateApplicationInput {
   jobId: string
   candidateId: string
   orgId: string
-  formAnswers: Record<string, unknown>
+  formAnswers: FormAnswer[]
   resumeUrl: string
   currentStage: PipelineStage
 }

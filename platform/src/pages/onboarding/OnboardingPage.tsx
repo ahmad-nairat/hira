@@ -1,10 +1,11 @@
 import { useState } from 'react'
 import { useQuery, useMutation } from '@tanstack/react-query'
 import { useNavigate, Link } from 'react-router-dom'
+import clsx from 'clsx'
 import { ArrowLeft, ArrowRight, Globe, Info, LogOut, Monitor, Plus, Sparkles, UserPlus, Users } from 'lucide-react'
 import { onboardingApi } from '../../api/onboarding.api'
-import { membersApi } from '../../api/members.api'
 import { useAuthStore } from '../../stores/auth.store'
+import type { OrgRole } from '../../types/api'
 import Button from '../../components/ui/Button'
 import Input from '../../components/ui/Input'
 import Spinner from '../../components/ui/Spinner'
@@ -22,31 +23,42 @@ export default function OnboardingPage() {
 
   const { data, isLoading } = useQuery({ queryKey: ['onboarding'], queryFn: onboardingApi.check })
 
-  const finalise = async (orgId: string) => {
-    const list = await membersApi.list(orgId).catch(() => [])
-    const me = list.find((m) => m.userId === user?.id)
-    setMembership({ orgId, role: me?.role ?? 'admin' })
+  // The role is always supplied by the API call that established the membership,
+  // so we never have to ask "what's my role in this org?" via a separate
+  // members list (which is admin-only and silently 403s for non-admins).
+  const finalise = (orgId: string, role: OrgRole) => {
+    setMembership({ orgId, role })
     navigate('/')
   }
 
   const createOrg = useMutation({
     mutationFn: async () => onboardingApi.createOrg({ name, slug }),
-    onSuccess: (org) => finalise(org.id),
+    // The creator of a fresh org is always its first admin.
+    onSuccess: (org) => finalise(org.id, 'admin'),
   })
   const requestJoin = useMutation({
     mutationFn: async () => onboardingApi.requestJoin(),
-    onSuccess: async (res) => { if (res.autoJoined) await finalise(res.orgId) },
+    onSuccess: (res) => { if (res.autoJoined && res.role) finalise(res.orgId, res.role) },
   })
   const acceptInvite = useMutation({
     mutationFn: (token: string) => onboardingApi.acceptInvite(token),
-    onSuccess: (res) => finalise(res.orgId),
+    onSuccess: (res) => finalise(res.orgId, res.role),
   })
 
   if (isLoading) return <div className="min-h-screen grid place-items-center bg-bg-app"><Spinner block /></div>
-  if (data?.hasOrg && data.currentOrgId) {
-    void finalise(data.currentOrgId)
+  if (data?.hasOrg && data.currentOrgId && data.currentRole) {
+    finalise(data.currentOrgId, data.currentRole)
     return <div className="min-h-screen grid place-items-center bg-bg-app"><Spinner block /></div>
   }
+
+  // If the user already has a pending invite for the same org their email
+  // domain maps to, accepting the invite is strictly better than requesting
+  // domain-based access (skips the admin-approval step, and the inviter has
+  // already picked a role). Hide the domain card in that case.
+  const inviteCoversDomainOrg = !!data?.domainOrg && !!data?.pendingInvites?.some((inv) => inv.orgId === data.domainOrg!.id)
+  // When the user's email domain matches a verified org, they are tied to that
+  // org and must not be allowed to spin up a separate one.
+  const createOrgDisabled = !!data?.domainOrg
 
   if (phase === 'create-org') {
     return (
@@ -148,7 +160,7 @@ export default function OnboardingPage() {
           </div>
         )}
 
-        {data?.domainOrg && (
+        {data?.domainOrg && !inviteCoversDomainOrg && (
           <div className="card mt-4 p-6">
             <div className="flex items-center gap-3 mb-3.5">
               <div className="icon-tile bg-primary-soft border-primary-br text-primary-ink"><Users size={16} /></div>
@@ -169,7 +181,7 @@ export default function OnboardingPage() {
           </div>
         )}
 
-        <div className="card mt-4 p-6">
+        <div className={clsx('card mt-4 p-6', createOrgDisabled && 'opacity-60')}>
           <div className="flex items-center gap-3 mb-3.5">
             <div className="icon-tile bg-primary-soft border-primary-br text-primary-ink"><Plus size={16} /></div>
             <div className="text-base font-semibold">Create a new organization</div>
@@ -187,9 +199,19 @@ export default function OnboardingPage() {
             ].map((t) => <span key={t.t} className="chip">{t.i} {t.t}</span>)}
           </div>
           <div className="pl-[50px]">
-            <Button variant="secondary" onClick={() => setPhase('create-org')}>
+            <Button
+              variant="secondary"
+              onClick={() => setPhase('create-org')}
+              disabled={createOrgDisabled}
+            >
               Create organization <ArrowRight size={14} />
             </Button>
+            {createOrgDisabled && data?.domainOrg && (
+              <div className="text-ink-4 text-xs mt-2 max-w-[440px] leading-snug">
+                Your email domain belongs to <strong className="text-ink-3">{data.domainOrg.name}</strong>.
+                You can't start a separate workspace from this account — accept an invite or join {data.domainOrg.name} above.
+              </div>
+            )}
           </div>
         </div>
 

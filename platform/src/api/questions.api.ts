@@ -9,4 +9,7 @@ export const questionsApi = {
   },
   updateAnswers: async (orgId: string, applicationId: string, questionsId: string, questions: QuestionItem[]): Promise<ReadGeneratedQuestionsDTO> =>
     (await client.patch(`/orgs/${orgId}/applications/${applicationId}/questions/${questionsId}/answers`, { questions })).data.data,
+  delete: async (orgId: string, applicationId: string, questionsId: string): Promise<void> => {
+    await client.delete(`/orgs/${orgId}/applications/${applicationId}/questions/${questionsId}`)
+  },
 }

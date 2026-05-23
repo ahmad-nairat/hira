@@ -33,6 +33,9 @@ def get_application(application_id: str) -> Optional[dict]:
 
 def get_applications_in_stages(job_id: str, stages: list[str]) -> list[dict]:
     with get_session() as s:
+        # `currentStage` is a Postgres enum; SQLAlchemy binds `stages` as text[].
+        # Postgres won't auto-coerce enum ↔ text in `= ANY(...)`, so we cast the
+        # column to text on the LHS to make the comparison type-compatible.
         rows = s.execute(
             text("""
                 SELECT a.*,
@@ -43,7 +46,7 @@ def get_applications_in_stages(job_id: str, stages: list[str]) -> list[dict]:
                 FROM applications a
                 JOIN candidates c ON c.id = a."candidateId"
                 WHERE a."jobId" = :job_id
-                  AND a."currentStage" = ANY(:stages)
+                  AND a."currentStage"::text = ANY(:stages)
                   AND a."deletedAt" IS NULL
             """),
             {"job_id": job_id, "stages": stages},
@@ -88,15 +91,35 @@ def update_application_stage(
         s.commit()
 
 
-def update_application_score(application_id: str, score: int) -> None:
+def update_application_rejection_note(application_id: str, note: Optional[str]) -> None:
     with get_session() as s:
         s.execute(
             text("""
                 UPDATE applications
-                SET score = :score, "hasOutdatedScore" = FALSE, "updatedAt" = NOW()
+                SET "rejectionNote" = :note, "updatedAt" = NOW()
                 WHERE id = :id
             """),
-            {"score": score, "id": application_id},
+            {"note": note, "id": application_id},
+        )
+        s.commit()
+
+
+def update_application_score(application_id: str, score: int, breakdown: Optional[dict] = None) -> None:
+    with get_session() as s:
+        s.execute(
+            text("""
+                UPDATE applications
+                SET score = :score,
+                    "scoreBreakdown" = CAST(:breakdown AS jsonb),
+                    "hasOutdatedScore" = FALSE,
+                    "updatedAt" = NOW()
+                WHERE id = :id
+            """),
+            {
+                "score": score,
+                "breakdown": json.dumps(breakdown) if breakdown is not None else None,
+                "id": application_id,
+            },
         )
         s.commit()
 

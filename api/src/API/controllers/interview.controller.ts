@@ -12,6 +12,13 @@ export class InterviewController {
     res.json({ data: await this.service.list(req.membership) })
   }
 
+  listByApplication = async (req: Request, res: Response): Promise<void> => {
+    if (!req.membership) throw new UnauthorizedError()
+    res.json({
+      data: await this.service.listByApplication(String(req.params.applicationId), req.membership),
+    })
+  }
+
   findOne = async (req: Request, res: Response): Promise<void> => {
     if (!req.membership) throw new UnauthorizedError()
     res.json({ data: await this.service.findById(String(req.params.interviewId), req.membership) })

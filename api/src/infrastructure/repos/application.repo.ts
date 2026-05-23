@@ -14,7 +14,7 @@ export class ApplicationRepo implements IApplicationRepo {
   async findById(id: string): Promise<Application | null> {
     return this.repo.findOne({
       where: { id, deletedAt: IsNull() },
-      relations: ['job', 'candidate', 'org'],
+      relations: ['job', 'candidate', 'org', 'interviews'],
     })
   }
 

@@ -88,7 +88,7 @@ export class InviteService {
     return toReadInviteDTO(invite)
   }
 
-  async accept(token: string, userId: string): Promise<{ orgId: string }> {
+  async accept(token: string, userId: string): Promise<{ orgId: string; role: OrgRole }> {
     const invite = await this.inviteRepo.findByToken(token)
     if (!invite) throw new NotFoundError('Invite')
     if (invite.status !== InviteStatus.PENDING || invite.expiresAt < new Date()) {
@@ -105,7 +105,7 @@ export class InviteService {
 
     await this.membershipRepo.create({ userId, orgId: invite.orgId, role: invite.role })
     await this.inviteRepo.updateStatus(invite.id, InviteStatus.ACCEPTED)
-    return { orgId: invite.orgId }
+    return { orgId: invite.orgId, role: invite.role }
   }
 
   async decline(token: string, userId: string): Promise<void> {

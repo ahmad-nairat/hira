@@ -45,7 +45,9 @@ export class ApplicationRoutes extends BaseRoute {
     this.router.post('/:applicationId/questions/generate', ARHI, validate(GenerateQuestionsSchema), asyncHandler(q.generate))
     this.router.get('/:applicationId/questions', ARHI, asyncHandler(q.list))
     this.router.patch('/:applicationId/questions/:questionsId/answers', ARHI, validate(UpdateAnswersSchema), asyncHandler(q.updateAnswers))
+    this.router.delete('/:applicationId/questions/:questionsId', ARHI, asyncHandler(q.delete))
 
+    this.router.get('/:applicationId/interviews', ARH, asyncHandler(interview.listByApplication))
     this.router.post('/:applicationId/interviews', ARH, validate(CreateInterviewSchema), asyncHandler(interview.create))
 
     this.router.post('/:applicationId/offer', AR, validate(CreateOfferSchema), asyncHandler(offer.create))

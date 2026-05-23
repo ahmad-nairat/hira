@@ -2,9 +2,10 @@ import { useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import clsx from 'clsx'
-import { ArrowLeft, Calendar, Info, Star, Video, MapPin } from 'lucide-react'
+import { ArrowLeft, Calendar, ChevronDown, ChevronRight, ExternalLink, Sparkles, Star, Trash2, Video, MapPin } from 'lucide-react'
 import { interviewsApi } from '../../api/interviews.api'
 import { applicationsApi } from '../../api/applications.api'
+import { questionsApi } from '../../api/questions.api'
 import { useOrgId } from '../../hooks/useOrg'
 import { useAuth } from '../../hooks/useAuth'
 import Spinner from '../../components/ui/Spinner'
@@ -12,8 +13,10 @@ import Button from '../../components/ui/Button'
 import Avatar from '../../components/ui/Avatar'
 import Chip from '../../components/ui/Chip'
 import Textarea from '../../components/ui/Textarea'
+import Modal from '../../components/ui/Modal'
+import QuestionsEditor from '../../components/questions/QuestionsEditor'
 import { extractError } from '../../api/client'
-import { formatDateTime, formatStage } from '../../utils/format'
+import { formatDate, formatDateTime, formatStage } from '../../utils/format'
 import type { Recommendation } from '../../types/api'
 
 const RECS: Array<{ v: Recommendation; label: string; tone: 'green' | 'teal' | 'neutral' | 'amber' | 'rose'; color: string }> = [
@@ -34,6 +37,10 @@ export default function InterviewDetailPage() {
   const [notes, setNotes] = useState('')
   const [rec, setRec] = useState<Recommendation>('neutral')
 
+  const [genOpen, setGenOpen] = useState(false)
+  const [genInstructions, setGenInstructions] = useState('')
+  const [questionsCardOpen, setQuestionsCardOpen] = useState(false)
+
   const it = useQuery({ queryKey: ['interview', interviewId], queryFn: () => interviewsApi.get(orgId, interviewId) })
   const fb = useQuery({ queryKey: ['feedback', interviewId], queryFn: () => interviewsApi.getFeedback(orgId, interviewId), enabled: !!interviewId })
   const app = useQuery({
@@ -41,10 +48,23 @@ export default function InterviewDetailPage() {
     queryFn: () => applicationsApi.get(orgId, it.data!.applicationId),
     enabled: !!it.data?.applicationId,
   })
+  const questions = useQuery({
+    queryKey: ['questions', it.data?.applicationId],
+    queryFn: () => questionsApi.list(orgId, it.data!.applicationId),
+    enabled: !!it.data?.applicationId,
+  })
 
   const submit = useMutation({
     mutationFn: () => interviewsApi.submitFeedback(orgId, interviewId, { rating, notes, recommendation: rec }),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['feedback', interviewId] }),
+  })
+  const generate = useMutation({
+    mutationFn: () => questionsApi.generate(orgId, it.data!.applicationId, { instructions: genInstructions, interviewId }),
+    onSuccess: () => {
+      setGenOpen(false)
+      setGenInstructions('')
+      qc.invalidateQueries({ queryKey: ['questions', it.data?.applicationId] })
+    },
   })
 
   if (it.isLoading) return <Spinner block />
@@ -77,7 +97,90 @@ export default function InterviewDetailPage() {
         </div>
       </div>
 
+      {app.data && (
+        <div className="card p-[18px] mb-5">
+          <div className="flex items-center gap-3 flex-wrap">
+            <Avatar size="lg" name={app.data.candidateName || 'Candidate'} />
+            <div className="flex-1 min-w-0">
+              <div className="text-base font-semibold">{app.data.candidateName || `Application #${app.data.id.slice(0, 6)}`}</div>
+              <div className="text-ink-3 text-sm mt-0.5">
+                Applied {formatDate(app.data.createdAt)}
+                {app.data.jobTitle ? <> for <strong className="text-ink">{app.data.jobTitle}</strong></> : null}
+              </div>
+            </div>
+            <a className="btn btn-ghost" href={app.data.resumeUrl} target="_blank" rel="noreferrer">
+              <ExternalLink size={13} /> Resume
+            </a>
+          </div>
+        </div>
+      )}
+
       <div className="grid grid-cols-1 xl:grid-cols-[1fr_360px] gap-5">
+        <div className="flex flex-col gap-4">
+        {app.data?.formAnswers?.length ? (
+          <div className="card p-[18px]">
+            <div className="mono-label mb-3">Candidate's form answers</div>
+            <div className="flex flex-col gap-3">
+              {app.data.formAnswers.map((fa) => (
+                <div key={fa.id}>
+                  <div className="text-ink-4 text-xs mb-1">{fa.question}</div>
+                  <div className="text-sm whitespace-pre-wrap">{String(fa.answer ?? '')}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+        ) : null}
+
+        <div className="card p-[18px]">
+          <button
+            type="button"
+            onClick={() => setQuestionsCardOpen(!questionsCardOpen)}
+            className="w-full flex items-center gap-2 text-left"
+          >
+            {questionsCardOpen ? <ChevronDown size={14} className="text-ink-4" /> : <ChevronRight size={14} className="text-ink-4" />}
+            <div className="mono-label">AI interview questions{questions.data?.length ? ` (${questions.data.length})` : ''}</div>
+            <div className="ml-auto" onClick={(e) => e.stopPropagation()}>
+              <Button size="sm" onClick={() => setGenOpen(true)} disabled={!app.data}>
+                <Sparkles size={12} /> Generate
+              </Button>
+            </div>
+          </button>
+          {questionsCardOpen && (
+            <div className="mt-3">
+              {questions.data?.length ? questions.data.map((g) => (
+                <div key={g.id} className="note-card mb-2">
+                  <div className="flex items-start justify-between gap-2 mb-2">
+                    <div className="text-ink-4 text-xs">
+                      Generated {formatDate(g.createdAt)}{g.instructions ? ` · ${g.instructions}` : ''}
+                    </div>
+                    <button
+                      type="button"
+                      title="Delete this question set"
+                      onClick={async () => {
+                        if (!confirm('Delete this entire question set? This cannot be undone.')) return
+                        await questionsApi.delete(orgId, app.data!.id, g.id)
+                        qc.invalidateQueries({ queryKey: ['questions', app.data!.id] })
+                      }}
+                      className="text-ink-4 hover:text-rose-ink transition-colors"
+                    >
+                      <Trash2 size={13} />
+                    </button>
+                  </div>
+                  <QuestionsEditor
+                    initial={g.questions}
+                    onSave={async (items) => {
+                      await questionsApi.updateAnswers(orgId, app.data!.id, g.id, items)
+                      qc.invalidateQueries({ queryKey: ['questions', app.data!.id] })
+                    }}
+                  />
+                </div>
+              )) : (
+                <p className="text-ink-4 italic">No questions generated yet — click Generate to draft a set based on the candidate's profile.</p>
+              )}
+            </div>
+          )}
+        </div>
+
         <div className="card p-[18px]">
           <div className="mono-label mb-3">Feedback</div>
           {fb.data ? (
@@ -132,24 +235,45 @@ export default function InterviewDetailPage() {
             <p className="text-ink-4 italic">Awaiting feedback from the assigned interviewer.</p>
           )}
         </div>
+        </div>
 
         <div className="card p-[18px] self-start">
-          <div className="mono-label mb-3">Candidate</div>
-          {app.data ? (
-            <div className="flex items-center gap-3">
-              <Avatar size="lg" name="Candidate" />
-              <div>
-                <div className="text-sm font-semibold">Application #{app.data.id.slice(0, 6)}</div>
-                <div className="text-ink-4 text-xs mt-0.5">Stage: {formatStage(app.data.currentStage)}</div>
+          <div className="mono-label mb-3">Interview</div>
+          {app.data && (
+            <div className="space-y-2 text-sm">
+              <div className="flex items-center justify-between">
+                <span className="text-ink-4 text-xs uppercase tracking-wide">Stage</span>
+                <span className="font-medium">{formatStage(app.data.currentStage)}</span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-ink-4 text-xs uppercase tracking-wide">Round</span>
+                <span className="font-medium">{formatStage(interview.stage)}</span>
               </div>
             </div>
-          ) : null}
-          <div className="text-ink-3 text-xs mt-4 leading-snug px-3 py-2.5 bg-surface-2 rounded-md flex gap-2">
-            <Info size={11} className="shrink-0 mt-0.5" />
-            <span>To preserve fairness, interviewers only see the candidate name and role applied for. Other context is intentionally hidden.</span>
-          </div>
+          )}
         </div>
       </div>
+
+      <Modal
+        open={genOpen}
+        onClose={() => setGenOpen(false)}
+        title="Generate interview questions"
+        subtitle="The AI drafts a question set tailored to the candidate's profile and the role."
+        footer={
+          <>
+            <Button onClick={() => setGenOpen(false)}>Cancel</Button>
+            <Button variant="primary" onClick={() => generate.mutate()} loading={generate.isPending}>Generate</Button>
+          </>
+        }
+      >
+        <Textarea
+          label="Optional focus (e.g. 'lean on React fundamentals')"
+          rows={3}
+          value={genInstructions}
+          onChange={(e) => setGenInstructions(e.target.value)}
+        />
+        {generate.isError && <div className="field-error mt-2">{extractError(generate.error)}</div>}
+      </Modal>
     </div>
   )
 }

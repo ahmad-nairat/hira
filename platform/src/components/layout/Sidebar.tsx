@@ -6,6 +6,7 @@ import { useAuth } from '../../hooks/useAuth'
 import { usePermission } from '../../hooks/usePermission'
 import { orgsApi } from '../../api/orgs.api'
 import { formatRole, avTint, initials } from '../../utils/format'
+import Avatar from '../ui/Avatar'
 
 interface Props { collapsed: boolean }
 
@@ -63,7 +64,7 @@ export default function Sidebar({ collapsed }: Props) {
           )}
         </NavLink>
         <NavLink to="/profile" className="flex items-center gap-2.5 px-2 py-1.5 rounded-lg hover:bg-surface hover:border-border-soft border border-transparent transition-colors">
-          <span className={clsx('avatar avatar-sm', avTint(user?.fullName))}>{initials(user?.fullName)}</span>
+          <Avatar size="lg" name={user?.fullName} src={user?.avatarUrl} />
           {!collapsed && (
             <>
               <span className="flex flex-col min-w-0 flex-1 text-left">

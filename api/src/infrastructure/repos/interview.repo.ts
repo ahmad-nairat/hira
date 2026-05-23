@@ -19,7 +19,13 @@ export class InterviewRepo implements IInterviewRepo {
   }
 
   async findByApplication(applicationId: string): Promise<Interview[]> {
-    return this.repo.find({ where: { applicationId, deletedAt: IsNull() }, order: { scheduledAt: 'ASC' } })
+    return this.repo.find({
+      where: { applicationId, deletedAt: IsNull() },
+      // Load feedback + interviewer in one round trip so the application
+      // detail page can show feedback inline without per-interview fetches.
+      relations: ['feedback', 'interviewer'],
+      order: { scheduledAt: 'ASC' },
+    })
   }
 
   async findByInterviewer(interviewerId: string): Promise<Interview[]> {

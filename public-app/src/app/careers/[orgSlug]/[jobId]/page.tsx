@@ -2,6 +2,7 @@ import Link from 'next/link'
 import { notFound } from 'next/navigation'
 import type { Metadata } from 'next'
 import DOMPurify from 'isomorphic-dompurify'
+import { marked } from 'marked'
 import { ArrowLeft, ArrowRight, Briefcase, Calendar, Clock, Copy, Linkedin, MapPin } from 'lucide-react'
 import CareersHeader from '../../../../components/careers/CareersHeader'
 import CareersFooter from '../../../../components/careers/CareersFooter'
@@ -29,7 +30,12 @@ export default async function JobDetailPage({ params }: PageProps) {
     throw err
   }
   const job = result.data
-  const safe = DOMPurify.sanitize(job.description, { USE_PROFILES: { html: true } })
+  // Recruiters write the job description as Markdown (headings, lists, links).
+  // Render to HTML, then sanitize what we get back from marked before injecting.
+  // `gfm: true` enables GitHub-flavoured Markdown (tables, strikethrough, task
+  // lists); `breaks: true` keeps line breaks meaningful for casual writers.
+  const html = await marked.parse(job.description || '', { gfm: true, breaks: true })
+  const safe = DOMPurify.sanitize(html, { USE_PROFILES: { html: true } })
   const apply = `/careers/${params.orgSlug}/${params.jobId}/apply`
 
   return (

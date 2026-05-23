@@ -24,4 +24,8 @@ export class GeneratedQuestionsRepo implements IGeneratedQuestionsRepo {
     if (!updated) throw new Error('Questions not found after update')
     return updated
   }
+
+  async delete(id: string): Promise<void> {
+    await this.repo.delete({ id })
+  }
 }

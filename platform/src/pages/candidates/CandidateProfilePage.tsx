@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { useParams } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import clsx from 'clsx'
-import { Check, Linkedin, Mail, Phone, Send, ShieldOff, Shield, Sparkles, ExternalLink } from 'lucide-react'
+import { Check, Linkedin, Mail, Phone, Send, ShieldOff, Shield, ExternalLink } from 'lucide-react'
 import { candidatesApi } from '../../api/candidates.api'
 import { useOrgId } from '../../hooks/useOrg'
 import { usePermission } from '../../hooks/usePermission'
@@ -68,8 +68,11 @@ export default function CandidateProfilePage() {
             </div>
           </div>
           <div className="flex gap-2 shrink-0">
-            <Button variant="secondary"><Sparkles size={13} /> Generate questions</Button>
-            <Button variant="secondary"><Send size={13} /> Suggest to job</Button>
+            {cd.latestResumeUrl && (
+              <a className="btn btn-ghost" href={cd.latestResumeUrl} target="_blank" rel="noreferrer">
+                <ExternalLink size={13} /> Resume
+              </a>
+            )}
             {can.blacklist && (
               <Button variant="danger" onClick={() => setBlkOpen(true)}><ShieldOff size={13} /> Blacklist</Button>
             )}
@@ -88,7 +91,9 @@ export default function CandidateProfilePage() {
             <Section title="Skills" empty="No skills parsed yet.">
               {cd.parsedSkills.length > 0 ? (
                 <div className="flex gap-1.5 flex-wrap">
-                  {cd.parsedSkills.map((s, i) => <span key={i} className="tag">{s.name}{s.level ? ` · ${s.level}` : ''}</span>)}
+                  {cd.parsedSkills.map((s, i) => (
+                    <span key={i} className="tag">{s.name}</span>
+                  ))}
                 </div>
               ) : null}
             </Section>

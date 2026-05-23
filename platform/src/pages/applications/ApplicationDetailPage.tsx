@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useParams } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Calendar, Check, ExternalLink, Send, Sparkles, ThumbsDown, ThumbsUp, X, ChevronDown } from 'lucide-react'
+import { AlertTriangle, Calendar, Check, ChevronDown, ChevronRight, ExternalLink, Minus, Plus, Send, Sparkles, Star, ThumbsDown, ThumbsUp, Trash2, Video, X } from 'lucide-react'
 import { applicationsApi } from '../../api/applications.api'
 import { candidatesApi } from '../../api/candidates.api'
 import { jobsApi } from '../../api/jobs.api'
@@ -23,8 +23,9 @@ import Textarea from '../../components/ui/Textarea'
 import Input from '../../components/ui/Input'
 import Select from '../../components/ui/Select'
 import { extractError } from '../../api/client'
-import { formatDate, formatRole, formatStage } from '../../utils/format'
-import type { PipelineStage, QuestionItem } from '../../types/api'
+import { formatDate, formatDateTime, formatRole, formatStage } from '../../utils/format'
+import QuestionsEditor from '../../components/questions/QuestionsEditor'
+import type { FormAnswer, PipelineStage, ScoreComponentName } from '../../types/api'
 
 export default function ApplicationDetailPage() {
   const { applicationId = '' } = useParams()
@@ -44,13 +45,25 @@ export default function ApplicationDetailPage() {
     stage: 'interview', interviewerId: '', scheduledAt: '', meetingType: 'online', meetingLink: '',
   })
   const [qInstructions, setQInstructions] = useState('')
+  const [openComponent, setOpenComponent] = useState<ScoreComponentName | null>(null)
+  // AI interview questions card defaults to collapsed — large content,
+  // recruiters rarely need it expanded by default.
+  const [questionsCardOpen, setQuestionsCardOpen] = useState(false)
 
   const app = useQuery({ queryKey: ['application', applicationId], queryFn: () => applicationsApi.get(orgId, applicationId) })
   const job = useQuery({ queryKey: ['jobs', orgId, app.data?.jobId], queryFn: () => jobsApi.get(orgId, app.data!.jobId), enabled: !!app.data?.jobId })
-  const cand = useQuery({ queryKey: ['candidate', app.data?.candidateId], queryFn: () => candidatesApi.get(orgId, app.data!.candidateId), enabled: !!app.data?.candidateId })
+  // Candidate endpoint is admin/recruiter/HM only — interviewers would 403 on
+  // it. Skip the query for them; the candidate sections render only when
+  // `cand.data` exists, so they're naturally hidden.
+  const cand = useQuery({ queryKey: ['candidate', app.data?.candidateId], queryFn: () => candidatesApi.get(orgId, app.data!.candidateId), enabled: !!app.data?.candidateId && !isInterviewerOnly })
   const notes = useQuery({ queryKey: ['notes', applicationId], queryFn: () => notesApi.list(orgId, applicationId), enabled: !!applicationId })
   const questions = useQuery({ queryKey: ['questions', applicationId], queryFn: () => questionsApi.list(orgId, applicationId), enabled: !!applicationId })
   const history = useQuery({ queryKey: ['stage-history', applicationId], queryFn: () => applicationsApi.stageHistory(orgId, applicationId), enabled: !!applicationId && !isInterviewerOnly })
+  const interviews = useQuery({
+    queryKey: ['application-interviews', applicationId],
+    queryFn: () => interviewsApi.listByApplication(orgId, applicationId),
+    enabled: !!applicationId && !isInterviewerOnly,
+  })
   const members = useQuery({ queryKey: ['members', orgId], queryFn: () => membersApi.list(orgId), enabled: !isInterviewerOnly })
 
   const invalidate = () => qc.invalidateQueries({ queryKey: ['application', applicationId] })
@@ -93,6 +106,12 @@ export default function ApplicationDetailPage() {
   if (app.isLoading) return <Spinner block />
   if (!app.data) return <div className="p-7 text-rose-ink">Application not found.</div>
   const a = app.data
+  // Tolerate applications stored before formAnswers was denormalised (legacy { fieldId: answer } map).
+  const formAnswers: FormAnswer[] = Array.isArray(a.formAnswers)
+    ? a.formAnswers
+    : Object.entries((a.formAnswers ?? {}) as Record<string, unknown>).map(
+      ([id, answer]): FormAnswer => ({ id, question: id, type: 'text', answer }),
+    )
 
   return (
     <div className="p-7">
@@ -102,7 +121,7 @@ export default function ApplicationDetailPage() {
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2 flex-wrap">
               <h1 className="h-display text-[28px] m-0">{cand.data?.fullName ?? '—'}</h1>
-              <Score value={a.score} />
+              {!isInterviewerOnly && <Score value={a.score} />}
             </div>
             <div className="text-ink-3 text-sm mt-2">
               Applied {formatDate(a.createdAt)} for <strong className="text-ink">{job.data?.title ?? '…'}</strong>
@@ -110,7 +129,7 @@ export default function ApplicationDetailPage() {
           </div>
           <div className="flex gap-2 shrink-0 flex-wrap justify-end">
             {can.scheduleInterview && <Button variant="secondary" onClick={() => setInterviewOpen(true)}><Calendar size={13} /> Schedule</Button>}
-            {!isInterviewerOnly && <Button variant="secondary" onClick={() => setQuestionsOpen(true)}><Sparkles size={13} /> Generate questions</Button>}
+            <Button variant="secondary" onClick={() => setQuestionsOpen(true)}><Sparkles size={13} /> Generate questions</Button>
             <a className="btn btn-ghost" href={a.resumeUrl} target="_blank" rel="noreferrer"><ExternalLink size={13} /> Resume</a>
           </div>
         </div>
@@ -140,21 +159,243 @@ export default function ApplicationDetailPage() {
         </div>
       </div>
 
+      {a.currentStage === 'early_rejection' && a.rejectionNote && (
+        <div className="card p-4 mb-5 border-l-4 border-rose-ink bg-rose-soft">
+          <div className="mono-label text-rose-ink mb-1.5">AI early rejection</div>
+          <div className="text-sm text-ink whitespace-pre-wrap">{a.rejectionNote}</div>
+        </div>
+      )}
+
       <div className="grid grid-cols-1 xl:grid-cols-[1fr_360px] gap-5">
         <div className="flex flex-col gap-4">
           <div className="card p-[18px]">
             <div className="mono-label mb-3">Form answers</div>
-            {Object.entries(a.formAnswers).length === 0 ? <div className="text-ink-4 italic">No answers.</div> : (
+            {formAnswers.length === 0 ? <div className="text-ink-4 italic">No answers.</div> : (
               <div className="flex flex-col gap-3">
-                {Object.entries(a.formAnswers).map(([k, v]) => (
-                  <div key={k}>
-                    <div className="text-ink-4 text-xs mb-1">{k}</div>
-                    <div className="text-sm">{String(v ?? '')}</div>
+                {formAnswers.map((fa) => (
+                  <div key={fa.id}>
+                    <div className="text-ink-4 text-xs mb-1">{fa.question}</div>
+                    <div className="text-sm">{String(fa.answer ?? '')}</div>
                   </div>
                 ))}
               </div>
             )}
           </div>
+
+          {!isInterviewerOnly && (interviews.data?.length ?? 0) > 0 && (
+            <div className="card p-[18px]">
+              <div className="mono-label mb-3">Interviews &amp; feedback</div>
+              <div className="flex flex-col gap-3">
+                {interviews.data!.map((iv) => (
+                  <div key={iv.id} className={"note-card " + (iv.feedback?.recommendation === 'strong_yes' ? 'border-green-br bg-green-soft' :
+                    iv.feedback?.recommendation === 'yes' ? 'border-teal-br bg-teal-soft' :
+                      iv.feedback?.recommendation === 'no' ? 'border-amber-br bg-amber-soft' :
+                        iv.feedback?.recommendation === 'strong_no' ? 'border-rose-br bg-rose-soft' :
+                          'border-border-soft bg-surface-2')
+                  }>
+
+                    <div className="flex items-center justify-between gap-3 flex-wrap mb-1.5">
+                      <div className="text-sm font-medium">
+                        {formatStage(iv.stage)}
+                        {iv.interviewerName && <span className="text-ink-3 font-normal"> · with {iv.interviewerName}</span>}
+                      </div>
+                      <Chip
+                        size="sm"
+                        tone={iv.status === 'completed' ? 'green' : iv.status === 'cancelled' ? 'rose' : 'neutral'}
+                      >{iv.status}</Chip>
+                    </div>
+                    <div className="text-ink-4 text-xs flex items-center gap-2 flex-wrap">
+                      <span className="inline-flex items-center gap-1"><Calendar size={11} /> {formatDateTime(iv.scheduledAt)}</span>
+                      <span className="inline-flex items-center gap-1">
+                        {iv.meetingType === 'online' ? <Video size={11} /> : null}
+                        {iv.meetingType.replace('_', ' ')}
+                      </span>
+                    </div>
+                    {iv.feedback ? (
+                      <div className="mt-3 -mx-3.5 -mb-3 px-3.5 py-3 rounded-r-lg flex flex-col gap-2">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <div className="flex items-center gap-0.5 text-amber-ink">
+                            {[1, 2, 3, 4, 5].map((n) => (
+                              <Star key={n} size={12} className={n <= iv.feedback!.rating ? 'fill-current' : ''} />
+                            ))}
+                          </div>
+                          <span className="text-ink-3 text-xs">{iv.feedback.rating}/5</span>
+                          <Chip
+                            size="sm"
+                            tone={
+                              iv.feedback.recommendation === 'strong_yes' ? 'green' :
+                                iv.feedback.recommendation === 'yes' ? 'teal' :
+                                  iv.feedback.recommendation === 'no' ? 'amber' :
+                                    iv.feedback.recommendation === 'strong_no' ? 'rose' : 'neutral'
+                            }
+                          >{iv.feedback.recommendation.replace('_', ' ')}</Chip>
+                        </div>
+                        <div className="text-sm text-ink-2 whitespace-pre-wrap">{iv.feedback.notes}</div>
+                      </div>
+                    ) : (
+                      <div className="mt-3 pt-3 border-t border-border-soft text-ink-4 italic text-sm">
+                        Awaiting feedback from {iv.interviewerName ?? 'the interviewer'}.
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {!isInterviewerOnly && (a.score !== null || a.scoreBreakdown) && (
+            <div className="card p-[18px]">
+              <div className="flex items-center justify-between mb-3">
+                <div className="mono-label">AI score</div>
+                <Score value={a.score} />
+              </div>
+              {a.scoreBreakdown?.summary && (
+                <div className="text-sm text-ink-2 mb-4">{a.scoreBreakdown.summary}</div>
+              )}
+              {a.scoreBreakdown?.components?.length ? (
+                <div className="flex flex-col gap-1.5">
+                  {a.scoreBreakdown.components.map((c) => {
+                    const isOpen = openComponent === c.name
+                    const pct = Math.max(0, Math.min(100, c.raw))
+                    return (
+                      <div key={c.name}>
+                        <button
+                          type="button"
+                          onClick={() => setOpenComponent(isOpen ? null : c.name)}
+                          className="w-full flex items-center gap-3 py-2 hover:bg-bg-2 rounded text-left"
+                        >
+                          {isOpen ? <ChevronDown size={14} className="text-ink-4 shrink-0" /> : <ChevronRight size={14} className="text-ink-4 shrink-0" />}
+                          <div className="capitalize text-sm font-medium w-32 shrink-0">{c.name}</div>
+                          <div className="text-ink-4 text-xs w-10 shrink-0">{Math.round(c.weight * 100)}%</div>
+                          <div className="flex-1 h-2 bg-bg-2 rounded-full overflow-hidden">
+                            <div
+                              className="h-full bg-primary rounded-full transition-all"
+                              style={{ width: `${pct}%` }}
+                            />
+                          </div>
+                          <div className="text-sm font-mono w-14 text-right shrink-0">{pct}/100</div>
+                        </button>
+                        {isOpen && (
+                          <div className="ml-7 mr-2 mb-2 mt-1 flex flex-col gap-2">
+                            <div className="text-sm text-ink-2 whitespace-pre-wrap">
+                              {c.reasoning || <span className="text-ink-4 italic">No reasoning recorded.</span>}
+                            </div>
+                            {c.gaps?.length > 0 && (
+                              <div>
+                                <div className="mono-label text-rose-ink mb-1">Why points were lost</div>
+                                <ul className="text-sm text-rose-ink space-y-1 list-disc pl-5">
+                                  {c.gaps.map((g, i) => <li key={i}>{g}</li>)}
+                                </ul>
+                              </div>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    )
+                  })}
+                </div>
+              ) : (
+                <div className="text-ink-4 italic text-sm">No breakdown recorded.</div>
+              )}
+              {a.scoreBreakdown?.bonuses?.length ? (
+                <div className="mt-4 pt-4 border-t border-border-soft">
+                  <div className="mono-label mb-2">Bonus adjustments</div>
+                  <div className="flex flex-col gap-2">
+                    {a.scoreBreakdown.bonuses.map((b, i) => {
+                      const isPenalty = b.points < 0
+                      const isPartial = !isPenalty && b.confidence === 'partial'
+                      const tone =
+                        isPenalty ? 'border-rose-br bg-rose-soft' :
+                          isPartial ? 'border-amber-br bg-amber-soft' :
+                            'border-green-br bg-green-soft'
+                      const pillTone =
+                        isPenalty ? 'bg-rose-soft text-rose-ink' :
+                          isPartial ? 'bg-amber-soft text-amber-ink' :
+                            'bg-green-soft text-green-ink'
+                      return (
+                        <div key={i} className={`flex items-start gap-2 border-l-2 ${tone} rounded px-2 py-1.5`}>
+                          <span className={`inline-flex items-center gap-0.5 text-xs font-mono px-1.5 py-0.5 rounded shrink-0 ${pillTone}`}>
+                            {b.points >= 0 ? <Plus size={10} /> : <Minus size={10} />}{Math.abs(b.points)}
+                          </span>
+                          <div className="text-sm min-w-0 flex-1">
+                            <div className="flex items-center gap-1.5">
+                              <span className="text-ink-2 italic">"{b.rule}"</span>
+                              {isPartial && (
+                                <span className="inline-flex items-center gap-0.5 text-[10px] uppercase tracking-wide font-medium text-amber-ink shrink-0">
+                                  <AlertTriangle size={10} /> partial
+                                </span>
+                              )}
+                            </div>
+                            {b.reasoning && <div className="text-ink-4 text-xs mt-0.5">{b.reasoning}</div>}
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
+                </div>
+              ) : null}
+            </div>
+          )}
+
+          {cand.data && (
+            <div className="card p-[18px]">
+              <div className="mono-label mb-3">Skills</div>
+              {cand.data.parsedSkills?.length ? (
+                <div className="flex flex-wrap gap-2">
+                  {cand.data.parsedSkills.map((s, i) => (
+                    <Chip key={`${s.name}-${i}`}>{s.name}</Chip>
+                  ))}
+                </div>
+              ) : <div className="text-ink-4 italic text-sm">No skills parsed yet.</div>}
+            </div>
+          )}
+
+          {cand.data && (
+            <div className="card p-[18px]">
+              <div className="mono-label mb-3">Experience</div>
+              {cand.data.parsedExperience?.length ? (
+                <div className="flex flex-col gap-3">
+                  {cand.data.parsedExperience.map((e, i) => (
+                    <div key={i}>
+                      <div className="text-sm font-medium">{e.title} · {e.company}</div>
+                      <div className="text-ink-4 text-xs mt-0.5">{e.start}{e.end ? ` — ${e.end}` : ' — Present'}</div>
+                      {e.description && <div className="text-sm text-ink-2 mt-1 whitespace-pre-wrap">{e.description}</div>}
+                    </div>
+                  ))}
+                </div>
+              ) : <div className="text-ink-4 italic text-sm">No experience parsed yet.</div>}
+            </div>
+          )}
+
+          {cand.data && (
+            <div className="card p-[18px]">
+              <div className="mono-label mb-3">Education</div>
+              {cand.data.parsedEducation?.length ? (
+                <div className="flex flex-col gap-2">
+                  {cand.data.parsedEducation.map((e, i) => (
+                    <div key={i}>
+                      <div className="text-sm font-medium">{e.degree}</div>
+                      <div className="text-ink-4 text-xs mt-0.5">{e.institution}{e.year ? ` · ${e.year}` : ''}</div>
+                    </div>
+                  ))}
+                </div>
+              ) : <div className="text-ink-4 italic text-sm">No education parsed yet.</div>}
+            </div>
+          )}
+
+          {cand.data && cand.data.parsedCerts?.length > 0 && (
+            <div className="card p-[18px]">
+              <div className="mono-label mb-3">Certifications</div>
+              <div className="flex flex-col gap-2">
+                {cand.data.parsedCerts.map((c, i) => (
+                  <div key={i}>
+                    <div className="text-sm font-medium">{c.name}</div>
+                    <div className="text-ink-4 text-xs mt-0.5">{c.issuer ?? ''}{c.year ? ` · ${c.year}` : ''}</div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
 
           {!isInterviewerOnly && (
             <div className="card p-[18px]">
@@ -178,22 +419,47 @@ export default function ApplicationDetailPage() {
           )}
 
           <div className="card p-[18px]">
-            <div className="flex items-center justify-between mb-3">
-              <div className="mono-label">AI interview questions</div>
-              <Button size="sm" onClick={() => setQuestionsOpen(true)}><Sparkles size={12} /> Generate</Button>
-            </div>
-            {questions.data?.length ? questions.data.map((g) => (
-              <div key={g.id} className="note-card mb-2">
-                <div className="text-ink-4 text-xs mb-2">Generated {formatDate(g.createdAt)}{g.instructions ? ` · ${g.instructions}` : ''}</div>
-                <QuestionsEditor
-                  initial={g.questions}
-                  onSave={async (items) => {
-                    await questionsApi.updateAnswers(orgId, applicationId, g.id, items)
-                    qc.invalidateQueries({ queryKey: ['questions', applicationId] })
-                  }}
-                />
+            <button
+              type="button"
+              onClick={() => setQuestionsCardOpen(!questionsCardOpen)}
+              className="w-full flex items-center gap-2 text-left"
+            >
+              {questionsCardOpen ? <ChevronDown size={14} className="text-ink-4" /> : <ChevronRight size={14} className="text-ink-4" />}
+              <div className="mono-label">AI interview questions{questions.data?.length ? ` (${questions.data.length})` : ''}</div>
+              <div className="ml-auto flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
+                <Button size="sm" onClick={() => setQuestionsOpen(true)}><Sparkles size={12} /> Generate</Button>
               </div>
-            )) : <p className="text-ink-4 italic">No questions generated yet.</p>}
+            </button>
+            {questionsCardOpen && (
+              <div className="mt-3">
+                {questions.data?.length ? questions.data.map((g) => (
+                  <div key={g.id} className="note-card mb-2">
+                    <div className="flex items-start justify-between gap-2 mb-2">
+                      <div className="text-ink-4 text-xs">Generated {formatDate(g.createdAt)}{g.instructions ? ` · ${g.instructions}` : ''}</div>
+                      <button
+                        type="button"
+                        title="Delete this question set"
+                        onClick={async () => {
+                          if (!confirm('Delete this entire question set? This cannot be undone.')) return
+                          await questionsApi.delete(orgId, applicationId, g.id)
+                          qc.invalidateQueries({ queryKey: ['questions', applicationId] })
+                        }}
+                        className="text-ink-4 hover:text-rose-ink transition-colors"
+                      >
+                        <Trash2 size={13} />
+                      </button>
+                    </div>
+                    <QuestionsEditor
+                      initial={g.questions}
+                      onSave={async (items) => {
+                        await questionsApi.updateAnswers(orgId, applicationId, g.id, items)
+                        qc.invalidateQueries({ queryKey: ['questions', applicationId] })
+                      }}
+                    />
+                  </div>
+                )) : <p className="text-ink-4 italic">No questions generated yet.</p>}
+              </div>
+            )}
           </div>
         </div>
 
@@ -282,30 +548,3 @@ export default function ApplicationDetailPage() {
   )
 }
 
-function QuestionsEditor({ initial, onSave }: { initial: QuestionItem[]; onSave: (items: QuestionItem[]) => Promise<void> }) {
-  const [items, setItems] = useState<QuestionItem[]>(initial)
-  const [saving, setSaving] = useState(false)
-  return (
-    <div className="flex flex-col gap-3 mt-2">
-      {items.map((it, i) => (
-        <div key={i}>
-          <div className="flex items-start gap-2 mb-1.5">
-            <span className="font-mono text-ink-4 text-xs mt-0.5">{String(i + 1).padStart(2, '0')}</span>
-            <div className="text-sm flex-1">{it.question}</div>
-          </div>
-          <textarea
-            className="textarea ml-6"
-            style={{ width: 'calc(100% - 22px)' }}
-            rows={2}
-            placeholder="Notes / answer…"
-            value={it.answer ?? ''}
-            onChange={(e) => setItems(items.map((x, j) => (j === i ? { ...x, answer: e.target.value } : x)))}
-          />
-        </div>
-      ))}
-      <Button size="sm" variant="primary" loading={saving} onClick={async () => {
-        setSaving(true); try { await onSave(items) } finally { setSaving(false) }
-      }}>Save answers</Button>
-    </div>
-  )
-}

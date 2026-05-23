@@ -23,7 +23,7 @@ export class AccessRequestService {
     @inject(TOKENS.IMailService) private readonly mail: IMailService,
   ) {}
 
-  async request(userId: string): Promise<{ orgId: string; autoJoined: boolean }> {
+  async request(userId: string): Promise<{ orgId: string; autoJoined: boolean; role: OrgRole | null }> {
     const user = await this.userRepo.findById(userId)
     if (!user) throw new NotFoundError('User')
 
@@ -44,7 +44,7 @@ export class AccessRequestService {
         orgId: org.id,
         role: org.autoJoinDefaultRole,
       })
-      return { orgId: org.id, autoJoined: true }
+      return { orgId: org.id, autoJoined: true, role: org.autoJoinDefaultRole }
     }
 
     const dup = await this.requestRepo.findByUserAndOrg(userId, org.id)
@@ -59,7 +59,7 @@ export class AccessRequestService {
         m.user ? this.mail.sendAccessRequestNotification(m.user.email, user.fullName, org.name) : Promise.resolve(),
       ),
     )
-    return { orgId: org.id, autoJoined: false }
+    return { orgId: org.id, autoJoined: false, role: null }
   }
 
   async list(orgId: string, membership: Membership) {

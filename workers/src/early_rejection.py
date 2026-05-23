@@ -8,6 +8,7 @@ from db.queries import (
     get_job,
     get_applications_in_stages,
     update_application_stage,
+    update_application_rejection_note,
 )
 
 logger = logging.getLogger(__name__)
@@ -35,13 +36,15 @@ class EarlyRejectionWorker(BaseWorker):
             self._publish_to_parser(application_id, job_id, app["orgId"], app["resumeUrl"])
             return
 
-        rejected = self._check_criteria(app["formAnswers"], criteria, job["title"])
+        rejected, reasoning = self._check_criteria(app["formAnswers"], criteria, job["title"])
         if rejected:
+            note = self._format_note(reasoning)
+            update_application_rejection_note(application_id, note)
             update_application_stage(
                 application_id,
                 "early_rejection",
                 moved_by=None,
-                note="Automatically rejected by AI based on job criteria",
+                note=note,
             )
         else:
             self._publish_to_parser(application_id, job_id, app["orgId"], app["resumeUrl"])
@@ -59,40 +62,65 @@ class EarlyRejectionWorker(BaseWorker):
         apps = get_applications_in_stages(job_id, ["early_rejection", "screening"])
 
         for app in apps:
-            rejected = (
-                self._check_criteria(app["formAnswers"], criteria, job["title"])
-                if criteria
-                else False
-            )
+            if criteria:
+                rejected, reasoning = self._check_criteria(app["formAnswers"], criteria, job["title"])
+            else:
+                rejected, reasoning = False, ""
             stage = app["currentStage"]
             if stage == "early_rejection" and not rejected:
+                update_application_rejection_note(app["id"], None)
                 update_application_stage(
                     app["id"], "ai_evaluation", note="Re-evaluation passed new criteria"
                 )
                 self._publish_to_parser(app["id"], job_id, app["orgId"], app["resumeUrl"])
             elif stage == "screening" and rejected:
+                note = self._format_note(reasoning)
+                update_application_rejection_note(app["id"], note)
                 update_application_stage(
                     app["id"],
                     "early_rejection",
-                    note="Failed re-evaluation against updated criteria",
+                    note=note,
                 )
 
-    def _check_criteria(self, form_answers: dict, criteria: list, job_title: str) -> bool:
+    def _check_criteria(self, form_answers, criteria: list, job_title: str) -> tuple[bool, str]:
         system_prompt = (
-            "You are an HR screening assistant. Given a candidate's form answers and a list of "
-            "rejection criteria, decide if the candidate should be rejected. "
-            'Return ONLY valid JSON: {"rejected": true} or {"rejected": false}. '
-            "Do not include any explanation."
+            "You are an HR screening assistant. For each rejection criterion you must evaluate "
+            "strictly and factually whether it applies to the candidate.\n\n"
+            "Process:\n"
+            "1. For EACH criterion, identify the candidate answer(s) most relevant to it and quote them.\n"
+            "2. Decide whether the criterion applies. Be strict and literal. Do NOT invent or guess "
+            "factual claims about geography, dates, certifications, or definitions. Use only what your "
+            "reliable knowledge supports; if genuinely uncertain about a fact, treat the criterion as "
+            "NOT applying rather than guessing.\n"
+            "3. The candidate is rejected if ANY single criterion applies.\n\n"
+            "Return ONLY a JSON object with this exact shape:\n"
+            "{\n"
+            '  "per_criterion": [\n'
+            '    {"criterion": "...", "relevant_answer": "...", "applies": true|false, "why": "short justification"}\n'
+            "  ],\n"
+            '  "rejected": true|false,\n'
+            '  "reasoning": "1-2 sentence summary the recruiter will see"\n'
+            "}"
         )
         criteria_lines = "\n".join(f"- {c}" for c in criteria)
         user_prompt = (
             f"Job: {job_title}\n\n"
             f"Rejection criteria (reject if ANY apply):\n{criteria_lines}\n\n"
-            f"Candidate's form answers:\n{json.dumps(form_answers, indent=2, default=str)}"
+            f"Candidate answers:\n{json.dumps(form_answers, indent=2, default=str)}"
         )
         raw = chat(system_prompt, user_prompt, response_format="json_object")
         result = json.loads(raw)
-        return bool(result.get("rejected", False))
+        rejected = bool(result.get("rejected", False))
+        reasoning = str(result.get("reasoning", "")).strip()
+        if not reasoning:
+            applied = [c for c in (result.get("per_criterion") or []) if c.get("applies")]
+            if applied:
+                reasoning = "; ".join(f'{c.get("criterion", "")}: {c.get("why", "")}' for c in applied)
+        return rejected, reasoning
+
+    def _format_note(self, reasoning: str) -> str:
+        base = "Automatically rejected by AI based on job criteria"
+        return f"{base}: {reasoning}" if reasoning else base
 
     def _publish_to_parser(self, application_id, job_id, org_id, resume_url) -> None:
         r = get_redis()

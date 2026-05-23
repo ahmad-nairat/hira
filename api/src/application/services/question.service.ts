@@ -68,4 +68,15 @@ export class QuestionService {
     const updated = await this.questionRepo.updateAnswers(questionsId, dto.questions)
     return toReadGeneratedQuestionsDTO(updated)
   }
+
+  async delete(questionsId: string, membership: Membership): Promise<void> {
+    const q = await this.questionRepo.findById(questionsId)
+    if (!q) throw new NotFoundError('Questions')
+    const app = await this.appRepo.findById(q.applicationId)
+    if (!app || app.orgId !== membership.orgId) throw new ForbiddenError()
+    if (membership.role === OrgRole.INTERVIEWER && q.generatedBy !== membership.userId) {
+      throw new ForbiddenError('Interviewers can only delete their own question sets')
+    }
+    await this.questionRepo.delete(questionsId)
+  }
 }

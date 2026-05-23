@@ -1,12 +1,19 @@
 # Auto-loaded by `docker compose up` for local dev. Overlays hot-reload
 # bind mounts onto the production-oriented base compose file.
 # To run a clean prod-style build, use `docker compose -f docker-compose.yml up`.
+#
+# Docker on WSL2 does not propagate inotify events through bind mounts, so each
+# watcher is forced to poll (CHOKIDAR_USEPOLLING for tsx/vite, WATCHPACK_POLLING
+# for Next.js, watchfiles for the Python workers).
 
 services:
   api:
     build:
       target: dev
     command: npm run dev
+    environment:
+      CHOKIDAR_USEPOLLING: "true"
+      CHOKIDAR_INTERVAL: "300"
     volumes:
       - ./api/src:/app/src
       - ./api/tsconfig.json:/app/tsconfig.json
@@ -22,6 +29,8 @@ services:
     environment:
       VITE_API_URL: ${VITE_API_URL:-http://localhost:3010/api/v1}
       VITE_PUBLIC_APP_URL: ${VITE_PUBLIC_APP_URL:-http://localhost:3001}
+      CHOKIDAR_USEPOLLING: "true"
+      CHOKIDAR_INTERVAL: "300"
     volumes:
       - ./platform/src:/app/src
       - ./platform/public:/app/public
@@ -32,3 +41,41 @@ services:
       - ./platform/tsconfig.json:/app/tsconfig.json
       - ./platform/package.json:/app/package.json
       - /app/node_modules
+
+  public-app:
+    build:
+      target: dev
+    command: npm run dev
+    environment:
+      NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:3010/api/v1}
+      NEXT_PUBLIC_APP_URL: ${NEXT_PUBLIC_APP_URL:-http://localhost:5173}
+      WATCHPACK_POLLING: "true"
+      CHOKIDAR_USEPOLLING: "true"
+    volumes:
+      - ./public-app/src:/app/src
+      - ./public-app/next.config.mjs:/app/next.config.mjs
+      - ./public-app/next-env.d.ts:/app/next-env.d.ts
+      - ./public-app/tsconfig.json:/app/tsconfig.json
+      - ./public-app/tailwind.config.ts:/app/tailwind.config.ts
+      - ./public-app/postcss.config.cjs:/app/postcss.config.cjs
+      - ./public-app/package.json:/app/package.json
+      - /app/node_modules
+      - /app/.next
+
+  workers:
+    # Replace the prod entrypoint with a dev shell that mirrors docker-entrypoint.sh
+    # but swaps the final `python src/main.py` for watchfiles so the workers
+    # restart when src/ changes.
+    entrypoint: ["sh", "-c"]
+    command:
+      - |
+        printenv | grep -E '^(DATABASE_URL|REDIS_URL|OPENAI_API_KEY|R2_)' >> /etc/environment
+        touch /var/log/domain_checker.log
+        cron
+        tail -F /var/log/domain_checker.log &
+        exec watchfiles --filter python 'python src/main.py' src
+    environment:
+      # WSL2 bind mounts don't deliver inotify events — force watchfiles to poll.
+      WATCHFILES_FORCE_POLLING: "true"
+    volumes:
+      - ./workers/src:/app/src

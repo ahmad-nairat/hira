@@ -28,7 +28,8 @@ export interface AuthData { user: ReadUserDTO; accessToken: string }
 export interface OnboardingStatus {
   hasOrg: boolean
   currentOrgId: string | null
-  pendingInvites: Array<{ id: string; token: string; orgName?: string; role: OrgRole }>
+  currentRole: OrgRole | null
+  pendingInvites: Array<{ id: string; token: string; orgId: string; orgName?: string; role: OrgRole }>
   domainOrg: { id: string; name: string; autoJoinEnabled: boolean } | null
 }
 
@@ -80,15 +81,27 @@ export interface ReadCandidateDTO {
   parsedExperience: Array<{ title: string; company: string; start: string; end?: string; description?: string }>
   parsedEducation: Array<{ degree: string; institution: string; year?: string }>
   parsedCerts: Array<{ name: string; issuer?: string; year?: string }>
+  latestResumeUrl: string | null
   createdAt: string; updatedAt: string
 }
 
+export interface FormAnswer { id: string; question: string; type: FieldType; answer: unknown }
+
+export type ScoreComponentName = 'education' | 'skills' | 'experience' | 'certifications'
+export interface ScoreComponent { name: ScoreComponentName; weight: number; raw: number; reasoning: string; gaps: string[] }
+export type ScoreBonusConfidence = 'high' | 'partial'
+export interface ScoreBonus { rule: string; points: number; reasoning: string; confidence: ScoreBonusConfidence }
+export interface ScoreBreakdown { components: ScoreComponent[]; bonuses: ScoreBonus[]; summary: string }
+
 export interface ReadApplicationDTO {
-  id: string; jobId: string; candidateId: string; orgId: string
-  currentStage: PipelineStage; score: number | null
-  formAnswers: Record<string, unknown>; resumeUrl: string
-  rejectionNote: string | null; hasOutdatedScore: boolean
-  createdAt: string; updatedAt: string
+  id: string; jobId: string; candidateId: string; orgId?: string
+  currentStage: PipelineStage; score?: number | null; scoreBreakdown?: ScoreBreakdown | null
+  formAnswers: FormAnswer[]; resumeUrl: string
+  rejectionNote?: string | null; hasOutdatedScore?: boolean
+  // Only populated for the interviewer view (the API denormalises these
+  // because interviewers can't call the candidate or job endpoints).
+  jobTitle?: string; candidateName?: string
+  createdAt: string; updatedAt?: string
 }
 
 export interface ReadStageHistoryDTO { id: string; applicationId: string; fromStage: PipelineStage | null; toStage: PipelineStage; movedBy: string | null; note: string | null; createdAt: string }
@@ -98,9 +111,11 @@ export interface ReadGeneratedQuestionsDTO { id: string; applicationId: string; 
 
 export interface ReadInterviewDTO {
   id: string; applicationId: string; orgId: string; stage: InterviewStage
-  interviewerId: string; scheduledAt: string | null; meetingType: MeetingType
+  interviewerId: string; interviewerName?: string
+  scheduledAt: string | null; meetingType: MeetingType
   meetingLink: string | null; meetingAddress: string | null
   candidateNotified: boolean; status: InterviewStatus
+  feedback?: ReadInterviewFeedbackDTO | null
   createdAt: string; updatedAt: string
 }
 

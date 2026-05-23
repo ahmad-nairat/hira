@@ -22,4 +22,10 @@ export class QuestionController {
     if (!req.membership) throw new UnauthorizedError()
     res.json({ data: await this.service.updateAnswers(String(req.params.questionsId), req.body, req.membership) })
   }
+
+  delete = async (req: Request, res: Response): Promise<void> => {
+    if (!req.membership) throw new UnauthorizedError()
+    await this.service.delete(String(req.params.questionsId), req.membership)
+    res.status(204).send()
+  }
 }

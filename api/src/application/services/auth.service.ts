@@ -1,10 +1,18 @@
 import { injectable, inject } from 'tsyringe'
 import bcrypt from 'bcrypt'
+import crypto from 'crypto'
 import jwt, { SignOptions } from 'jsonwebtoken'
 import { TOKENS } from '../../infrastructure/di/tokens'
 import { IUserRepo } from '../../core/repo-interfaces/IUserRepo'
-import { RegisterDTO, LoginDTO, AuthResponseDTO, toReadUserDTO } from '../../core/dtos/auth.dto'
-import { ConflictError, UnauthorizedError, NotFoundError } from '../errors'
+import { IFileService } from '../../infrastructure/services/file.service'
+import { RegisterDTO, LoginDTO, AuthResponseDTO, ReadUserDTO, toReadUserDTO } from '../../core/dtos/auth.dto'
+import { ConflictError, UnauthorizedError, NotFoundError, BusinessRuleError } from '../errors'
+
+const AVATAR_MIME_EXT: Record<string, string> = {
+  'image/png': 'png',
+  'image/jpeg': 'jpg',
+  'image/jpg': 'jpg',
+}
 
 const BCRYPT_ROUNDS = 12
 
@@ -19,7 +27,10 @@ interface RefreshPayload {
 
 @injectable()
 export class AuthService {
-  constructor(@inject(TOKENS.IUserRepo) private readonly userRepo: IUserRepo) {}
+  constructor(
+    @inject(TOKENS.IUserRepo) private readonly userRepo: IUserRepo,
+    @inject(TOKENS.IFileService) private readonly fileService: IFileService,
+  ) {}
 
   async register(dto: RegisterDTO): Promise<AuthResponseDTO> {
     const existing = await this.userRepo.findByEmail(dto.email)
@@ -76,6 +87,26 @@ export class AuthService {
     const user = await this.userRepo.findById(userId)
     if (!user) throw new NotFoundError('User')
     return toReadUserDTO(user)
+  }
+
+  async uploadAvatar(userId: string, buffer: Buffer, mimeType: string): Promise<ReadUserDTO> {
+    const ext = AVATAR_MIME_EXT[mimeType.toLowerCase()]
+    if (!ext) throw new BusinessRuleError('Avatar must be a PNG or JPG image')
+
+    const user = await this.userRepo.findById(userId)
+    if (!user) throw new NotFoundError('User')
+
+    const key = `avatars/${userId}/${crypto.randomUUID()}.${ext}`
+    const url = await this.fileService.upload(buffer, key, mimeType)
+    const updated = await this.userRepo.update(userId, { avatarUrl: url })
+    return toReadUserDTO(updated)
+  }
+
+  async removeAvatar(userId: string): Promise<ReadUserDTO> {
+    const user = await this.userRepo.findById(userId)
+    if (!user) throw new NotFoundError('User')
+    const updated = await this.userRepo.update(userId, { avatarUrl: null })
+    return toReadUserDTO(updated)
   }
 
   /**

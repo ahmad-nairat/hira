@@ -3,6 +3,8 @@ import type { InterviewStage, MeetingType, ReadInterviewDTO, ReadInterviewFeedba
 
 export const interviewsApi = {
   list: async (orgId: string): Promise<ReadInterviewDTO[]> => (await client.get(`/orgs/${orgId}/interviews`)).data.data,
+  listByApplication: async (orgId: string, applicationId: string): Promise<ReadInterviewDTO[]> =>
+    (await client.get(`/orgs/${orgId}/applications/${applicationId}/interviews`)).data.data,
   get: async (orgId: string, id: string): Promise<ReadInterviewDTO> => (await client.get(`/orgs/${orgId}/interviews/${id}`)).data.data,
   create: async (
     orgId: string,

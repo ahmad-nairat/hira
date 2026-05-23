@@ -1,7 +1,7 @@
 import { injectable, inject } from 'tsyringe'
 import { Request, Response } from 'express'
 import { AuthService } from '../../application/services/auth.service'
-import { UnauthorizedError } from '../../application/errors'
+import { UnauthorizedError, BadRequestError } from '../../application/errors'
 
 const REFRESH_COOKIE = 'refresh_token'
 const REFRESH_COOKIE_PATH = '/api/v1/auth/refresh'
@@ -50,6 +50,20 @@ export class AuthController {
   me = async (req: Request, res: Response): Promise<void> => {
     if (!req.user) throw new UnauthorizedError()
     const user = await this.service.me(req.user.id)
+    res.json({ data: user })
+  }
+
+  uploadAvatar = async (req: Request, res: Response): Promise<void> => {
+    if (!req.user) throw new UnauthorizedError()
+    const file = (req as Request & { file?: Express.Multer.File }).file
+    if (!file) throw new BadRequestError('Avatar file is required')
+    const user = await this.service.uploadAvatar(req.user.id, file.buffer, file.mimetype)
+    res.json({ data: user })
+  }
+
+  removeAvatar = async (req: Request, res: Response): Promise<void> => {
+    if (!req.user) throw new UnauthorizedError()
+    const user = await this.service.removeAvatar(req.user.id)
     res.json({ data: user })
   }
 

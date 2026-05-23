@@ -1,4 +1,5 @@
 import passport from 'passport'
+import multer from 'multer'
 import { Strategy as GoogleStrategy, Profile } from 'passport-google-oauth20'
 import { container } from '../../infrastructure/di/container'
 import { BaseRoute } from './base.route'
@@ -6,6 +7,17 @@ import { AuthController } from '../controllers/auth.controller'
 import { authenticate, validate, asyncHandler } from '../middlewares'
 import { RegisterSchema, LoginSchema } from '../../core/dtos/auth.dto'
 import { Request, Response, NextFunction } from 'express'
+
+const AVATAR_MAX_BYTES = 1 * 1024 * 1024
+const avatarUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: AVATAR_MAX_BYTES },
+  fileFilter: (_req, file, cb) => {
+    const ok = file.mimetype === 'image/png' || file.mimetype === 'image/jpeg' || file.mimetype === 'image/jpg'
+    if (!ok) return cb(new Error('Avatar must be a PNG or JPG image'))
+    cb(null, true)
+  },
+})
 
 let googleConfigured = false
 function configureGoogle(): void {
@@ -43,6 +55,8 @@ export class AuthRoutes extends BaseRoute {
     this.router.post('/refresh', asyncHandler(c.refresh))
     this.router.post('/logout', authenticate, asyncHandler(c.logout))
     this.router.get('/me', authenticate, asyncHandler(c.me))
+    this.router.post('/me/avatar', authenticate, avatarUpload.single('avatar'), asyncHandler(c.uploadAvatar))
+    this.router.delete('/me/avatar', authenticate, asyncHandler(c.removeAvatar))
 
     if (process.env.GOOGLE_CLIENT_ID) {
       this.router.get(
