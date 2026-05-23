@@ -1,0 +1,8 @@
+{
+  "dependencies": {
+    "@types/express": "^5.0.6",
+    "express": "^5.2.1",
+    "typeorm": "^1.0.0",
+    "zod": "^4.4.3"
+  }
+}
