@@ -25,7 +25,7 @@ export class PublicService {
     @inject(TOKENS.IJobRepo) private readonly jobRepo: IJobRepo,
     @inject(TOKENS.IJobFormRepo) private readonly jobFormRepo: IJobFormRepo,
     @inject(ApplicationService) private readonly applicationService: ApplicationService,
-  ) {}
+  ) { }
 
   async getCareersPage(orgSlug: string): Promise<PublicCareersPageDTO> {
     const org = await this.orgRepo.findBySlug(orgSlug)
@@ -98,13 +98,13 @@ export class PublicService {
     const emailField = form.fields.find((f) => f.type === FieldType.TEXT && f.label.toLowerCase().includes('email'))
     const nameField = form.fields.find((f) => f.type === FieldType.TEXT && f.label.toLowerCase().includes('name'))
     const phoneField = form.fields.find((f) => f.type === FieldType.TEXT && f.label.toLowerCase().includes('phone'))
-    if (!emailField) throw new BusinessRuleError('Form must include an email field')
-    if (!nameField) throw new BusinessRuleError('Form must include a full name field')
 
-    const email = String(rawAnswers[emailField.id] ?? '').trim()
-    const fullName = String(rawAnswers[nameField.id] ?? '').trim()
+    const rawEmail = emailField ? String(rawAnswers[emailField.id] ?? '').trim() : ''
+    const rawName = nameField ? String(rawAnswers[nameField.id] ?? '').trim() : ''
+
+    const email = rawEmail || `anonymous-${Date.now()}-${Math.floor(Math.random() * 10000)}@no-email.local`
+    const fullName = rawName || 'Anonymous Candidate'
     const phone = phoneField ? String(rawAnswers[phoneField.id] ?? '').trim() || null : null
-    if (!email || !fullName) throw new BusinessRuleError('Email and full name are required')
 
     await this.applicationService.ingestPublicApplication({
       orgId: org.id,

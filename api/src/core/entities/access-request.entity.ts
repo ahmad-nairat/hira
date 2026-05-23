@@ -11,17 +11,17 @@ export enum AccessRequestStatus {
 @Entity({ name: 'access_requests' })
 @Unique(['orgId', 'userId'])
 export class AccessRequest {
-  @PrimaryGeneratedColumn('uuid')
+  @PrimaryGeneratedColumn('uuid')//
   id!: string
 
-  @Column({ type: 'uuid' })
+  @Column({ type: 'uuid' })//
   orgId!: string
 
   @ManyToOne(() => Org)
   @JoinColumn({ name: 'orgId' })
   org!: Org
 
-  @Column({ type: 'uuid' })
+  @Column({ type: 'uuid' })//
   userId!: string
 
   @ManyToOne(() => User)
